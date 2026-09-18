@@ -66,6 +66,12 @@ uncommitted changes against README.md`.
 
 - Needs tool calling: `--enable-auto-tool-choice --tool-call-parser qwen3_xml`.
 - `--max-num-seqs 1` is fine: the pipeline is strictly sequential.
+- **Use vLLM >= 0.29.** On 0.22 the `qwen3_xml` streaming parser emits phantom tool
+  calls with `name: null` whenever the model makes PARALLEL tool calls (3 real calls
+  stream out as 5). OpenCode then kills the subagent with
+  `Expected 'function.name' to be a string`. Symptom: the planner works, the coder
+  fails on its first turn, every time. If a server you cannot upgrade shows this,
+  add "make exactly one tool call per response" to each agent prompt as a workaround.
 - Prefix caching (vLLM >= 0.29 for this hybrid model) matters a lot here: every turn
   resends a growing prefix. Measured at home: a repeated 159K-token prompt takes 2 s
   warm vs ~60 s cold.
@@ -79,5 +85,4 @@ uncommitted changes against README.md`.
   truth** - the reviewer must run the tests itself. A project without tests gets a
   much weaker review.
 - `permission` rules are guard rails, not a sandbox.
-- Written against the OpenCode docs (agents in `.opencode/agents/`, `permission`,
-  `steps`, Task-tool delegation); not yet smoke-tested against a live OpenCode binary.
+- Tested end-to-end with OpenCode 1.18.31 against vLLM 0.29.0 (2026-09-19).
