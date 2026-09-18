@@ -1,0 +1,23 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "work-llm/REPLACE-WITH-SERVED-MODEL-NAME",
+  "small_model": "work-llm/REPLACE-WITH-SERVED-MODEL-NAME",
+  "default_agent": "orchestrator",
+  "compaction": { "auto": true },
+  "provider": {
+    "work-llm": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Work LLM",
+      "options": {
+        "baseURL": "{env:WORK_LLM_BASE_URL}",
+        "apiKey": "{env:WORK_LLM_API_KEY}"
+      },
+      "models": {
+        "REPLACE-WITH-SERVED-MODEL-NAME": {
+          "name": "Qwen3.8 27B (work)",
+          "limit": { "context": 130000, "output": 16384 }
+        }
+      }
+    }
+  }
+}
