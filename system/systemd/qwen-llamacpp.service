@@ -1,0 +1,16 @@
+[Unit]
+Description=Qwen3.6-27B-NEO-CODE GGUF Q4_K_M + Vision (llama.cpp, RTX 5090)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/env bash %h/qwen-vllm/serve-llamacpp.sh
+Restart=on-failure
+RestartSec=10
+# Model load (~17 GB GGUF + mmproj) + CUDA graph warmup.
+TimeoutStartSec=600
+KillMode=mixed
+
+[Install]
+WantedBy=default.target

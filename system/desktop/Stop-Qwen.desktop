@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Stop Qwen (any model)
+Comment=Stop whichever Qwen vLLM model is running and free GPU VRAM
+Exec=/home/bezol/qwen-vllm/stop-model.sh
+Icon=media-playback-stop
+Terminal=true
+Categories=Utility;

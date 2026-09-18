@@ -1,0 +1,15 @@
+[Unit]
+Description=Qwen3.8-27B NVFP4 + MTP + Vision (vLLM, RTX 5090)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/env bash %h/qwen-vllm/serve-qwen38.sh
+Restart=on-failure
+RestartSec=10
+# First start may compile kernels; warm cache starts in ~2 min.
+TimeoutStartSec=900
+KillMode=mixed
+
+# NOTE: intentionally NOT enabled for boot autostart (manual start via desktop button).

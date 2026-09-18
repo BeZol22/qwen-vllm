@@ -1,0 +1,9 @@
+- [GPU memory utilization is a measured constant, now 0.95](gpu-memory-utilization-locked.md) — re-measure, don't nudge; 0.97 starts fine but OOMs on the first request.
+- [Qwen3.8 context ceiling on the 5090](qwen38-context-ceiling-measured.md) — 190400 at fp8/0.95; native 262144 needs a lossy KV dtype.
+- [Host RAM is the other ceiling](host-ram-is-the-other-ceiling.md) — 31 GiB + 8 GiB swap; unbounded FlashInfer JIT (MAX_JOBS unset) host-OOMs the box and kills the terminal scope. Not a VRAM bug.
+- [Nightly CUDA toolchain must be coherent](nightly-cuda-toolchain-must-be-coherent.md) — all pip CUDA components at 13.4.92; three-way constraint, and 13.0 is impossible on this glibc.
+- [Qwen3.8 NVFP4 full-context port](qwen38-nvfp4-full-context-port.md) — 262144 fits (300,980-token pool) but output is token-corrupted (nvfp4 1/8 vs fp8 8/8); DEAD END: fork 2/8 even on its pinned flashinfer, byte-identical output. Try TurboQuant KV instead — no patches needed.
+- [Secure Boot blocks DKMS nvidia modules](secureboot-mok-blocks-nvidia-dkms.md) — a fresh unenrolled MOK made the GPU vanish after the 610 upgrade; enroll the key, do not blame vLLM.
+- [KV dtype decision: stay on fp8](kv-dtype-decision-stay-on-fp8.md) — settled 2026-09-18; don't re-litigate NVFP4/TurboQuant without a new reason.
+- [vLLM 0.29 needs KV layout HND on the 5090](vllm-029-breaks-this-model.md) — without VLLM_KV_CACHE_LAYOUT=HND the model ignores the prompt; with it 0.29.0 is validated (166400 + prefix caching).
+- [Production is vLLM 0.29 + OpenCode pipeline](production-is-vllm-029-opencode-pipeline.md) — qwen38.service runs 0.29.0/166400 since 2026-09-19; 0.22 breaks parallel tool calls. Rollback unit saved.
