@@ -382,13 +382,53 @@ Three things in that file, each for a measured reason:
   Context shift is disabled by default in b11053, so overflow is a hard
   rejection mid-task. Compacting at 100000 leaves room for the compaction and
   the reply; compacting at the wall is compacting too late.
-* **`permissions.deny: ["Agent", "Workflow"]`.** THE CONTEXT IS ONE SHARED SLOT,
+* **`CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=1` and
+  `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=1`.** THE CONTEXT IS ONE SHARED SLOT,
   NOT ONE PER AGENT. `--parallel 1` means a single 131,072-token slot served
-  serially, so spawned subagents do not get a window each — they queue for the
-  same one (measured: `requests_deferred 6`) and thrash the prefix cache with
-  divergent prefixes. The tool is `Agent`; `Task` is not a valid tool name and
-  the published schema rejects it. Remove the entry if you ever want subagents
-  back, but on this backend they cost more than they buy.
+  serially: subagents each get their own *conversation* context but queue for
+  the same *hardware* slot (measured: `requests_deferred 6`), thrashing the
+  prefix cache with divergent prefixes. Parallel agents here are strictly
+  slower, never faster.
+
+  An earlier version of this file denied the `Agent` tool outright. **That was
+  wrong** — it also blocked the per-job-clean-context pattern, which is the
+  whole point of the agent pipeline and is *good* on this backend: a fresh
+  small context per job stays under the prefix-cache cliff. Cap the
+  concurrency, do not remove the capability. (The tool is `Agent`, incidentally;
+  `Task` is not a valid tool name and the published schema rejects it.)
+
+### The agent pipeline, ported from OpenCode
+
+`system/claude-code/agents/*.md` are the OpenCode planner / coder / reviewer /
+refactorer, translated to Claude Code's format, and
+`system/claude-code/CLAUDE.md.template` carries the orchestrator role — in
+Claude Code the **main session** is the primary, so there is no orchestrator
+agent file. Install with:
+
+```bash
+cp system/claude-code/agents/*.md        ~/.claude/agents/      # or <project>/.claude/agents/
+cp system/claude-code/CLAUDE.md.template <project>/CLAUDE.md
+```
+
+What changed in translation, and why:
+
+* `steps:` becomes `maxTurns:`; `mode: subagent` is implicit in being a file
+  under `agents/`.
+* **`model: inherit` on every agent.** The aliases `sonnet` / `opus` do not
+  exist on this endpoint; without `inherit` an agent would name a model the
+  server has never heard of.
+* **`omitClaudeMd: true` on every agent**, matching the original design's
+  "subagents start with an empty context" — and it keeps the orchestrator
+  procedure in CLAUDE.md from leaking into the subagents that must not follow it.
+* OpenCode's per-command `bash:` allow/deny lists have no per-agent equivalent;
+  Claude Code's agent frontmatter is tool-level (`tools`, `disallowedTools`).
+  The dangerous-command denies (`git push`, `rm -rf`, `sudo`, …) moved to
+  `permissions.deny` in the settings file, where they apply to every agent.
+* Every agent gets `disallowedTools: Agent, Workflow` so none of them can fan
+  out, belt-and-braces with the spawn depth of 1.
+
+Validated against the published settings schema: the settings file, and every
+agent's frontmatter fields and tool names.
 
 ### The prefix-cache cliff at large context
 

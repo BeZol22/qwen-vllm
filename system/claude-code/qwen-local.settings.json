@@ -6,9 +6,17 @@
     "ANTHROPIC_MODEL": "qwen3.8-27b",
     "ANTHROPIC_SMALL_FAST_MODEL": "qwen3.8-27b",
     "CLAUDE_CODE_MAX_CONTEXT_TOKENS": "131072",
-    "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "100000"
+    "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "100000",
+    "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS": "1",
+    "CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH": "1"
   },
   "permissions": {
-    "deny": ["Agent", "Workflow"]
+    "deny": [
+      "Bash(git push:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(git clean:*)",
+      "Bash(rm -rf:*)",
+      "Bash(sudo:*)"
+    ]
   }
 }

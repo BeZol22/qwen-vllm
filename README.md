@@ -27,10 +27,11 @@ decoding, vision, tool calling - plus an **OpenCode multi-agent coding pipeline*
 - `monitor.html` - live dashboard for the running server: context gauge, decode tok/s,
   prompt-cache reuse, draft acceptance, queue depth. Open it straight from disk; it polls
   `/slots` and `/metrics` and needs no web server (llama-server reflects any Origin).
-- `system/claude-code/qwen-local.settings.json` - Claude Code against this box in one file:
-  endpoint, the real 131072 context (it cannot discover it), and `deny: [Agent, Workflow]`
-  because the context is ONE shared slot, not one per subagent. Use with
-  `claude --settings <file>` so paid sessions stay untouched.
+- `system/claude-code/` - Claude Code against this box: `qwen-local.settings.json` (endpoint,
+  the real 131072 context it cannot discover, and concurrency capped at 1 because the context
+  is ONE shared slot), plus `agents/` and `CLAUDE.md.template` - the OpenCode planner / coder /
+  reviewer / refactorer pipeline ported over. Use `claude --settings <file>` so paid sessions
+  stay untouched.
 - `setup-firewall-windows.ps1` - opens 8000 to the LAN subnet only, self-elevating and
   idempotent (`-DryRun` to preview). The Windows counterpart to REBUILD.md's ufw rules;
   also flips the adapter to the Private profile, without which any rule is inert.
