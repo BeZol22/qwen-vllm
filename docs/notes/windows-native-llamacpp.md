@@ -310,6 +310,27 @@ from `opencode.home.json`, all of them forced by the runtime change:
   recommended thinking-mode values server-side (`--temp 1.0 --top-p 0.95
   --top-k 20`); anything the client sends overrides them.
 
+**The global config on the Windows box itself** is
+[`system/opencode-global/opencode.windows.json`](../../system/opencode-global/opencode.windows.json)
+— same thing but `baseURL` `http://127.0.0.1:8000/v1`, since OpenCode running
+here talks to loopback. `restore.sh` is Linux-only, so install it by hand; note
+that **the agents must be copied too**, because `default_agent: orchestrator`
+dangles without them (the same lesson as
+[[production-is-vllm-029-opencode-pipeline]]):
+
+```powershell
+$dest = "$env:USERPROFILE\.config\opencode"
+Copy-Item system\opencode-global\opencode.windows.json "$dest\opencode.json"   # do not clobber an existing one
+New-Item -ItemType Directory -Force -Path "$dest\agents" | Out-Null
+Copy-Item opencode-agents\agents\*.md "$dest\agents\"
+```
+
+Verified 2026-09-19 on opencode v2.0.10: `opencode models` lists
+`local-llamacpp/qwen3.8-27b`, and `opencode run` answers through the
+orchestrator agent. (An editor may warn that the `$schema` URL is untrusted —
+that is a workspace trust prompt, not a config error, and the existing
+`opencode.home.json` triggers it identically.)
+
 **The baseURL is the fragile part, and it is fragile in two different ways.**
 
 `192.168.178.75` is a **DHCP** address, not static — `PrefixOrigin=Dhcp`. The
