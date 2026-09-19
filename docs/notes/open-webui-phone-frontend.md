@@ -32,6 +32,40 @@ matters, because [[gpu-memory-utilization-locked]] leaves only ~650 MiB of slack
   a reinstall cannot eat them. **This is the chat history and it is not in git --
   back it up.**
 
+**Web search: ON (DuckDuckGo), and the env var is NOT how you change it.**
+`ENABLE_WEB_SEARCH` defaults to False, so there is no web button out of the box.
+The trap: `config.py` builds `DEFAULT_CONFIG` from the env and calls
+`Config.seed_defaults()` -- *insert if absent*. After the first boot the values
+live in the `config` key/value table in `webui.db` and **the DB wins forever**;
+changing the env afterwards does nothing, silently, with no warning in the log.
+Setting it in `serve-openwebui.sh` appeared to work and did not.
+
+On an EXISTING install use Admin Panel -> Settings -> Web Search, or edit the DB
+with the service stopped (values are JSON-encoded):
+
+```sql
+update config set value='true'          where key='web.search.enable';
+update config set value='"duckduckgo"'  where key='web.search.engine';
+update config set value='5'             where key='web.search.result_count';
+```
+
+DuckDuckGo is the only engine needing **no API key** (bundled `ddgs`); Brave,
+Google PSE, Tavily, Serper etc. all want one, SearXNG wants another service.
+URL fetching (`#https://...` in a message) uses `web.loader.engine`, empty =
+the built-in fetcher, which needs nothing.
+
+Retrieved pages are embedded and chunk-retrieved by default. With 166K of
+context, `web.search.bypass_embedding_and_retrieval=true` would feed whole pages
+instead -- better fidelity, but 5 full pages is easily tens of thousands of
+tokens. Left off until measured.
+
+**`ui.enable_signup` is false** after the first admin is created, so other family
+phones CANNOT self-register until an admin flips it (Admin Panel -> Settings ->
+General) or creates the users by hand. `ui.default_user_role` is `pending`, so
+even with signup on, the admin must approve each new account -- which is the
+right shape for a family LAN, but it does mean a new phone sees a "waiting for
+approval" screen rather than a chat.
+
 ufw needs its own rule for the new port:
 `sudo ufw allow from 192.168.178.0/24 to any port 3000 proto tcp`.
 

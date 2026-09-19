@@ -243,6 +243,17 @@ chat history.
 **Measured:** 2.30 GiB RSS and **zero VRAM** -- `nvidia-smi` shows only
 `VLLM::EngineCore`, so the UI never competes with the model for the 5090.
 
+**Web search is ON via DuckDuckGo** (no API key). The env vars in
+`serve-openwebui.sh` only take effect on a FRESH install: `DEFAULT_CONFIG` is
+*seeded* into `webui.db` on first boot and the DB wins from then on, silently. On
+an existing install change it in Admin Panel -> Settings -> Web Search, or edit
+the `config` table directly. Details in
+[`docs/notes/open-webui-phone-frontend.md`](docs/notes/open-webui-phone-frontend.md).
+
+**Other phones cannot sign up by default.** After the first admin exists,
+`ui.enable_signup` is false; turn it on in Admin Panel -> Settings -> General, and
+note `ui.default_user_role=pending` means the admin approves each new account.
+
 **Privacy note:** inference is 100% local, but Open WebUI itself makes OUTBOUND
 calls to huggingface.co on first run to fetch its RAG embedding model
 (`all-MiniLM-L6-v2`). That is outbound only and does not make anything reachable
