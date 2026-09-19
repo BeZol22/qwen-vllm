@@ -180,3 +180,37 @@ are known good on 0.29 ([[production-is-vllm-029-opencode-pipeline]]).
 
 Phones must **reload the page** to pick up changed settings.
 
+### Two traps when verifying web search
+
+**The client caches settings at page load.** `webSearch: "always"` is served from
+`GET /api/v1/users/user/settings` when the session starts, so an open tab -- or an
+"Add to Home Screen" PWA, which mobile Safari keeps alive for a long time --
+keeps using the OLD value and still answers "nem tudok keresgélni". **Reload the
+page on each phone after changing it.** Confirm the server side independently:
+
+```bash
+curl -s -H "Authorization: Bearer $TOKEN" localhost:3000/api/v1/users/user/settings
+# -> {"ui": {"webSearch": "always", ...}}
+```
+
+**Builtin tools need a `session_id`.** `middleware.py`:
+
+```python
+use_builtin_tools = is_note_chat or (
+    bool(metadata.get("session_id"))
+    and metadata.get("params", {}).get("function_calling") != "legacy"
+    and (...capabilities...).get("builtin_tools", True)
+)
+```
+
+A hand-rolled `POST /api/chat/completions` with no `session_id` gets NO web-search
+tool and the model dutifully replies that it cannot browse -- which looks exactly
+like the bug and is not. Adding `chat_id` instead flips the request to the async
+path (`{"status": true, "task_ids": [...]}`) and the answer arrives over the
+websocket rather than in the HTTP response, so it cannot be read from curl either.
+The browser supplies both. **Verify in the UI, not with curl.**
+
+To authenticate a local test, mint a short-lived JWT with the server's own secret
+(`~/.webui_secret_key`, HS256, payload `{id, jti, iat, exp}`) rather than trying to
+reuse a browser session. Delete the token afterwards.
+
