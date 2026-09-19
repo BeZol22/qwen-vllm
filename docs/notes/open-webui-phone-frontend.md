@@ -214,3 +214,27 @@ To authenticate a local test, mint a short-lived JWT with the server's own secre
 (`~/.webui_secret_key`, HS256, payload `{id, jti, iat, exp}`) rather than trying to
 reuse a browser session. Delete the token afterwards.
 
+### Re-applying all of this: `configure-openwebui.py`
+
+Every setting above lives in `webui.db`, not in git, so a rebuild that only clones
+the repo comes up with all of them wrong and nothing to explain it. Run after
+open-webui has started once and the admin account exists:
+
+```bash
+systemctl --user stop open-webui
+./configure-openwebui.py     # idempotent; prints only what it changes
+systemctl --user start open-webui
+```
+
+Two things that made it non-obvious to write:
+
+* **The `value` column has NUMERIC affinity.** An int written as the JSON text
+  `"5"` comes back from sqlite as Python `int` 5, so comparing raw strings marks
+  every numeric setting as changed on every run. Both sides have to be normalised
+  to Python objects first. Running it twice must report `0 changed`.
+* **A client can overwrite a server-side user setting.** Saving anything from a
+  page that loaded before the change writes the whole `settings.ui` object back,
+  dropping keys the stale page never had. `webSearch` was observed reverting on
+  the admin account this way. Re-running the script fixes it; reload the phone
+  afterwards.
+

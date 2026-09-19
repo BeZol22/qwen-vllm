@@ -9,6 +9,33 @@ fp8 KV cache, **166,400-token context**, prefix caching, MTP-3 + CUDA graphs, pl
 OpenCode agent pipeline. Reference system: Ubuntu 26.04, kernel 7.0.0-22, NVIDIA driver
 **610.57.04**, Python 3.12.13 (uv-managed), iGPU drives the display (5090 headless).
 
+## BEFORE YOU WIPE THE MACHINE
+
+The repo is on GitHub and everything in it is reproducible. These are NOT, and are
+gone for good once the disk is formatted:
+
+| what | size | what you lose |
+|---|---|---|
+| `~/.local/share/open-webui/` | ~1 MB | **every chat and every user account.** Plain SQLite -- just copy the directory |
+| `~/.webui_secret_key` | 32 B | the JWT signing key; lose it and every phone is logged out and must sign in again |
+
+```bash
+DEST=/run/media/$USER/<stick>/qwen-backup && mkdir -p "$DEST"
+cp -a ~/.local/share/open-webui "$DEST"/
+cp -a ~/.webui_secret_key       "$DEST"/
+# and confirm the repo is really on the remote, not just committed locally:
+git -C ~/qwen-vllm push
+[ "$(git -C ~/qwen-vllm rev-parse HEAD)" = "$(git -C ~/qwen-vllm ls-remote origin main | cut -f1)" ] \
+  && echo "REPO SAFE ON REMOTE" || echo "NOT PUSHED -- STOP"
+```
+
+Restore by copying both back **before** first starting open-webui, then run
+`./configure-openwebui.py`. Skipping the backup does not cost you the setup, only
+the history and the accounts: `configure-openwebui.py` rebuilds every setting and
+people simply re-register.
+
+Everything else below is only a download:
+
 Not in git (too big) - re-download or back up to an external disk BEFORE formatting:
 
 | what | size | how to get it back |
@@ -106,9 +133,16 @@ three gates above would notice it regressing.
 
 ```bash
 curl -fsSL https://opencode.ai/install | bash
+# restore.sh already installed the GLOBAL config + agent team, so this is enough:
+cd /any/project && opencode            # starts on the orchestrator agent
+# per-project instead (e.g. at work, against a different server):
 ~/qwen-vllm/opencode-agents/install.sh /path/to/project home
-cd /path/to/project && opencode        # Tab -> orchestrator
 ```
+`system/opencode-global/opencode.json` points OpenCode at `http://localhost:8000/v1`
+and sets `default_agent: orchestrator`, so the model AND the five-agent team are
+available in EVERY directory with no per-project setup. `restore.sh` will not
+overwrite an existing `~/.config/opencode/opencode.json` -- merge by hand if you
+have one (you need `provider`, `model`, `small_model`, `default_agent`).
 See `opencode-agents/README.md`. A working sample lives in
 `opencode-agents/example-project/`.
 
