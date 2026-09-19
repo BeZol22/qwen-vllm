@@ -7,6 +7,13 @@ Wants=network-online.target qwen38.service
 
 [Service]
 Type=simple
+# Pinned, NOT cosmetic: open_webui/__init__.py does
+#   KEY_FILE = Path.cwd() / '.webui_secret_key'
+# and auto-generates the JWT signing key there on first start. Started from a
+# different cwd it mints a DIFFERENT key, which invalidates every session token
+# and logs every phone out with no error anywhere. systemd already defaults a
+# user unit's cwd to $HOME; this states it so a manual run cannot drift.
+WorkingDirectory=%h
 ExecStart=/usr/bin/env bash %h/qwen-vllm/serve-openwebui.sh
 Restart=on-failure
 RestartSec=10

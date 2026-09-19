@@ -104,3 +104,43 @@ LLM server -- and the error surfaces in vLLM, not here, which makes it a horribl
 thing to debug. Confirm isolation with
 `nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv,noheader`:
 it must list ONLY `VLLM::EngineCore`.
+
+## Only the admin could see the model (fixed 2026-09-19)
+
+A newly registered family member logged in to an **empty model picker** and could
+not chat at all. Not a connection problem -- `utils/models.py:get_filtered_models`
+drops any model lacking a row in the `model` table, for non-admins, by design:
+
+```python
+elif user.role == "admin":
+    # No DB entry means no access control configured yet;
+    # only admins can see unconfigured models.
+    filtered_models.append(model)
+```
+
+Models served from a connection have **no such row** until an admin opens
+Admin Panel -> Settings -> Models and sets that model's access, so the default
+state of a fresh install is admin-only.
+
+Fixed with `BYPASS_MODEL_ACCESS_CONTROL=True` in `serve-openwebui.sh` rather than
+per-model access grants in the UI, because it is a plain env var (`env.py`, not a
+PersistentConfig) -- declarative, in git, applies to a fresh rebuild, and immune to
+the seed-once DB trap that made the web-search setting a no-op. Safe here: one
+model, one household, everyone reaching :3000 is already inside the ufw LAN scope
+with an approved account. Use per-model grants instead if this box ever serves a
+model that should not be universally readable.
+
+Verified by calling `get_filtered_models` with a `role="user"` user and a model
+carrying no DB row: `VISIBLE`.
+
+## The JWT key lives in the CWD
+
+`open_webui/__init__.py` does `KEY_FILE = Path.cwd() / ".webui_secret_key"` and
+auto-generates the JWT signing key there on first start. Started from a different
+directory it mints a DIFFERENT key, invalidating every session token and logging
+every phone out with no error in any log. The unit now pins `WorkingDirectory=%h`
+and the script `cd "$HOME"` so a manual run cannot drift.
+
+**`~/.webui_secret_key` is a backup item**, alongside `DATA_DIR`: lose it and
+everyone is logged out.
+

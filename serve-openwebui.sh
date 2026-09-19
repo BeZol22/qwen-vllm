@@ -58,6 +58,26 @@ export ENABLE_SEARCH_QUERY_GENERATION=True
 export HOST=0.0.0.0
 export PORT="${PORT:-3000}"
 
+# --- model visibility for non-admins ---------------------------------------
+# WITHOUT THIS, ONLY THE ADMIN SEES THE MODEL. utils/models.py:get_filtered_models
+# drops any model that has no row in the `model` table for non-admin users:
+#     elif user.role == "admin":
+#         # No DB entry means no access control configured yet;
+#         # only admins can see unconfigured models.
+# Models served from a connection have no such row until an admin opens
+# Admin Panel -> Settings -> Models and sets the model's access, so a freshly
+# registered family member logs in to an EMPTY model picker and cannot chat at all.
+#
+# Two ways out. Per-model access grants in the UI are the granular one, but they
+# live in webui.db and vanish with it. This is an ENV var (env.py, not a
+# PersistentConfig), so it is declarative, lives in git, applies to a fresh
+# rebuild, and cannot be silently overridden by a stale DB value -- which the
+# web-search setting already taught us to care about.
+# Safe here: one model, one household, and everyone who can reach :3000 is already
+# inside the ufw LAN scope and has an approved account. Revisit if this box ever
+# serves models that should NOT be universally readable.
+export BYPASS_MODEL_ACCESS_CONTROL=True
+
 # --- auth -------------------------------------------------------------------
 # WEBUI_AUTH stays ON. The first account created becomes the admin, and on a
 # family LAN that is the difference between "my chats" and "everyone's chats".
@@ -76,6 +96,12 @@ mkdir -p "$DATA_DIR"
 # landing on the 5090 would OOM the LLM server -- and the symptom would appear in
 # vLLM, not here. Whisper on CPU costs seconds for a phone dictation; leave it.
 # Verify with: nvidia-smi --query-compute-apps=... should list ONLY VLLM::EngineCore.
+
+# RUN THIS FROM $HOME (the unit pins WorkingDirectory=%h). open-webui stores its
+# JWT signing key in ./.webui_secret_key relative to the CWD, so launching this
+# by hand from another directory generates a fresh key and silently logs every
+# phone out. The real one lives at ~/.webui_secret_key -- back it up with the DB.
+cd "$HOME"
 
 source "$HOME/open-webui-env/bin/activate"
 exec open-webui serve --host "$HOST" --port "$PORT"
