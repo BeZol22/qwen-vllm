@@ -72,3 +72,35 @@ ufw needs its own rule for the new port:
 **Privacy:** inference is 100% local, but Open WebUI makes OUTBOUND calls to
 huggingface.co on first run for its RAG embedding model (`all-MiniLM-L6-v2`).
 Outbound only; nothing becomes reachable from the internet.
+
+## Settings changed from the defaults (2026-09-19)
+
+All of these live in `webui.db`, NOT in the launcher (see the seeding trap above),
+so they survive restarts but **are lost if the DB is deleted** -- another reason
+`DATA_DIR` is worth backing up. Re-apply with `update config set value=... where
+key=...`, values JSON-encoded, service stopped.
+
+| key | value | why |
+|---|---|---|
+| `ui.enable_signup` | `true` | other phones can register; off again once an admin exists |
+| `ui.default_user_role` | `pending` | admin approves each new account (left at default) |
+| `ui.enable_community_sharing` | **`false`** | default ON uploads a whole chat to openwebui.com on one mis-tap |
+| `task.tags.enable` | **`false`** | each message fired 3 background model calls; dropped 2 |
+| `task.follow_up.enable` | **`false`** | as above; auto-titles kept, they earn their cost |
+| `chat.context_compaction.enable` | `true` | was off, so a long chat hit the 166K wall and errored |
+| `chat.context_compaction.token_threshold` | `120000` | default 80000 compacts needlessly early for a 166K window |
+| `audio.stt.whisper_model` | `small` | `base` is weak outside English; `small` is ~3x CPU for a large accuracy gain |
+| `web.search.enable` / `.engine` | `true` / `duckduckgo` | see above |
+
+**Voice input already worked before any of this:** `audio.stt.engine=''` routes to
+local faster-whisper, and TTS falls back to the browser's own voices, so an iPhone
+dictates and speaks without the audio leaving the box.
+
+**NEVER set `USE_CUDA_DOCKER=true`.** `env.py` keeps `DEVICE_TYPE='cpu'` unless it
+is set; with it, `routers/audio.py` puts faster-whisper on `cuda` and the RAG
+embedder follows. qwen38 runs at utilization 0.95 with ~650 MiB spare
+([[gpu-memory-utilization-locked]]), so either model landing on the 5090 OOMs the
+LLM server -- and the error surfaces in vLLM, not here, which makes it a horrible
+thing to debug. Confirm isolation with
+`nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv,noheader`:
+it must list ONLY `VLLM::EngineCore`.

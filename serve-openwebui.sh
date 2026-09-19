@@ -68,5 +68,14 @@ export WEBUI_AUTH=True
 export DATA_DIR="${DATA_DIR:-$HOME/.local/share/open-webui}"
 mkdir -p "$DATA_DIR"
 
+# --- GPU ISOLATION: do NOT set USE_CUDA_DOCKER=true -------------------------
+# env.py leaves DEVICE_TYPE='cpu' unless USE_CUDA_DOCKER=true, and routers/audio.py
+# then sends faster-whisper to 'cuda' when it is. The RAG embedder follows the same
+# switch. On this box that is a loaded gun: qwen38 runs at --gpu-memory-utilization
+# 0.95 with roughly 650 MiB of VRAM to spare, so a Whisper or embedding model
+# landing on the 5090 would OOM the LLM server -- and the symptom would appear in
+# vLLM, not here. Whisper on CPU costs seconds for a phone dictation; leave it.
+# Verify with: nvidia-smi --query-compute-apps=... should list ONLY VLLM::EngineCore.
+
 source "$HOME/open-webui-env/bin/activate"
 exec open-webui serve --host "$HOST" --port "$PORT"
