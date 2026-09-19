@@ -289,6 +289,44 @@ here, not a half-measure.**
   `llama-server` unchanged. Only raise `--ctx-size` after they pass; a clean
   startup proves nothing, and that lesson transfers intact.
 
+## OpenCode client config
+
+[`opencode-agents/providers/opencode.windows.json`](../../opencode-agents/providers/opencode.windows.json),
+installed the usual way — `./install.sh /path/to/project windows`. Differences
+from `opencode.home.json`, all of them forced by the runtime change:
+
+* **Model id is `qwen3.8-27b`**, not `unsloth/Qwen3.8-27B-NVFP4`. llama-server
+  advertises whatever `--alias` says; `curl /v1/models` is the authority.
+* **`limit.context` 126000**, not 160000 — the server runs `--ctx-size 131072`,
+  and this keeps the same ~4% margin the Linux config leaves.
+* **`attachment` / `reasoning` / `tool_call` / `temperature` are declared true.**
+  The Linux config left them to defaults; here all four are verified by
+  `test-agentic.py`, so they are stated rather than inferred. The provider block
+  validates clean against OpenCode's published schema (the only schema errors
+  are on `model`/`small_model`, which enumerate known cloud models — the
+  existing `opencode.home.json` produces exactly the same two, so they are
+  expected for any custom provider, not a mistake).
+* **Do not set sampling in OpenCode.** The launcher already applies Qwen's
+  recommended thinking-mode values server-side (`--temp 1.0 --top-p 0.95
+  --top-k 20`); anything the client sends overrides them.
+
+**The baseURL is the fragile part, and it is fragile in two different ways.**
+
+`192.168.178.75` is a **DHCP** address, not static — `PrefixOrigin=Dhcp`. The
+fix is a DHCP reservation on the router (the 192.168.178.x range is a Fritz!Box
+default), not a hand-edited config that breaks on the next lease.
+
+And **do not reach for `9800X3D.local` instead.** It resolves, but mDNS here
+hands back IPv6 first (`2a00:1e:b700:...`, plus link-locals) and `llama-server`
+binds `0.0.0.0`, which is IPv4-only — so every connection would try IPv6, get
+refused, and depend on the client's Happy Eyeballs fallback. That is the same
+trap [[production-is-vllm-029-opencode-pipeline]] hit from the other direction,
+where the fix was `--host ::`. **That fix does not port to Windows**: Windows
+defaults `IPV6_V6ONLY` to true, so `--host ::` there would be IPv6-*only* and
+break IPv4 clients outright, and the LAN firewall rule is scoped to an IPv4
+subnet so it would not cover an IPv6 listener anyway. Stay on IPv4; use the
+address, and pin it at the router. On the Windows box itself, `127.0.0.1`.
+
 ### Two Windows-specific traps, both cost a debugging round
 
 * **The launcher killed itself under output redirection.** `llama-server` writes

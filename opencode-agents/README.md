@@ -42,6 +42,7 @@ configured with, so the same files work at home and at work.
 ./install.sh --global                    # agents -> ~/.config/opencode/agents/
 ./install.sh /path/to/project home       # + opencode.json for the local vLLM server
 ./install.sh /path/to/project work       # + opencode.json template for work (edit it)
+./install.sh /path/to/project windows    # + opencode.json for the Windows llama.cpp box
 ```
 
 At work, if OpenCode already has the company model configured, the first form is
@@ -53,7 +54,8 @@ export WORK_LLM_BASE_URL=https://.../v1
 export WORK_LLM_API_KEY=...
 ```
 
-`limit.context` is set to 130000 for work and 160000 for home; OpenCode uses it to
+`limit.context` is set to 130000 for work, 160000 for home and 126000 for windows
+(that box serves `--ctx-size 131072`); OpenCode uses it to
 decide when to compact. `.pipeline/` is added to the project's `.gitignore`.
 
 ## Use

@@ -21,6 +21,9 @@ decoding, vision, tool calling - plus an **OpenCode multi-agent coding pipeline*
   private host RAM (measured; the 24.5 GB working set is mostly the mmapped model file).
   `$env:QWEN_SPEC` picks the drafter: `dflash` (default) / `mtp` / `none`. See
   [`docs/notes/windows-native-llamacpp.md`](docs/notes/windows-native-llamacpp.md).
+- `opencode-agents/providers/opencode.windows.json` - OpenCode client config for the
+  Windows box (model id `qwen3.8-27b`, 126000 ctx, attachment/reasoning/tool_call all
+  verified). Install with `./install.sh <project> windows`.
 - `setup-firewall-windows.ps1` - opens 8000 to the LAN subnet only, self-elevating and
   idempotent (`-DryRun` to preview). The Windows counterpart to REBUILD.md's ufw rules;
   also flips the adapter to the Private profile, without which any rule is inert.
