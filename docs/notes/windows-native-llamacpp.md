@@ -426,6 +426,13 @@ What changed in translation, and why:
   `permissions.deny` in the settings file, where they apply to every agent.
 * Every agent gets `disallowedTools: Agent, Workflow` so none of them can fan
   out, belt-and-braces with the spawn depth of 1.
+* **They run on macOS and Windows.** Every agent lists both `Bash` and
+  `PowerShell`, because on Windows the primary shell is PowerShell and `Bash` is
+  Git Bash. Where a shell command appears in an agent body it is given in both
+  forms (`tail -n 40` / `Select-Object -Last 40`, `mkdir -p` / `New-Item
+  -ItemType Directory -Force`); `git` is identical on both. The destructive
+  denies in the settings file are likewise doubled — a `Bash(rm -rf:*)` deny
+  does nothing about `Remove-Item -Recurse -Force` on the Windows side.
 
 Validated against the published settings schema: the settings file, and every
 agent's frontmatter fields and tool names.

@@ -1,7 +1,7 @@
 ---
 name: planner
 description: Turns a feature request into a concrete, file-level implementation plan in .pipeline/PLAN.md. Does not write product code. Use at the start of any non-trivial change.
-tools: Read, Glob, Grep, Write, Bash
+tools: Read, Glob, Grep, Write, Bash, PowerShell
 disallowedTools: Agent, Workflow, WebFetch, WebSearch
 model: inherit
 maxTurns: 40

@@ -1,7 +1,7 @@
 ---
 name: refactorer
 description: After the feature is approved, proposes behaviour-preserving simplifications in .pipeline/REFACTOR.md. Does not edit product code.
-tools: Read, Glob, Grep, Write, Bash
+tools: Read, Glob, Grep, Write, Bash, PowerShell
 disallowedTools: Agent, Workflow, Edit, MultiEdit, WebFetch, WebSearch
 model: inherit
 maxTurns: 40

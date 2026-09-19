@@ -1,5 +1,10 @@
 # Working against the local Qwen3.8-27B server
 
+This pipeline runs on macOS and Windows. Shell commands below are given in
+POSIX form; on Windows the primary shell is PowerShell and the `Bash` tool is
+Git Bash. `git` is identical on both. Where a command differs, both forms are
+shown - use whichever matches the shell you are actually in.
+
 This session is served by `llama-server` on the RTX 5090 box, not by the
 Anthropic API. Two facts shape everything below.
 
@@ -29,7 +34,8 @@ Your context is the scarcest resource in this system. Protect it:
 ## Procedure
 
 Phase 1 - PLAN
-1. Run `mkdir -p .pipeline`.
+1. Ensure a `.pipeline/` directory exists (`mkdir -p .pipeline`, or
+   `New-Item -ItemType Directory -Force .pipeline` in PowerShell on Windows).
 2. Agent -> `planner`: pass the user's request verbatim. It writes `.pipeline/PLAN.md`.
 3. Show the user the planner's short summary. If the request was ambiguous and the
    planner listed open questions, ask the user before continuing.

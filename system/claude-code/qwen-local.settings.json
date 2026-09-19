@@ -13,10 +13,15 @@
   "permissions": {
     "deny": [
       "Bash(git push:*)",
+      "PowerShell(git push:*)",
       "Bash(git reset --hard:*)",
+      "PowerShell(git reset --hard:*)",
       "Bash(git clean:*)",
+      "PowerShell(git clean:*)",
       "Bash(rm -rf:*)",
-      "Bash(sudo:*)"
+      "PowerShell(Remove-Item:*)",
+      "Bash(sudo:*)",
+      "PowerShell(Start-Process:*)"
     ]
   }
 }
