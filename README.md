@@ -21,6 +21,9 @@ decoding, vision, tool calling - plus an **OpenCode multi-agent coding pipeline*
   private host RAM (measured; the 24.5 GB working set is mostly the mmapped model file).
   `$env:QWEN_SPEC` picks the drafter: `dflash` (default) / `mtp` / `none`. See
   [`docs/notes/windows-native-llamacpp.md`](docs/notes/windows-native-llamacpp.md).
+- `setup-firewall-windows.ps1` - opens 8000 to the LAN subnet only, self-elevating and
+  idempotent (`-DryRun` to preview). The Windows counterpart to REBUILD.md's ufw rules;
+  also flips the adapter to the Private profile, without which any rule is inert.
 - `bench-drafters.py` - DFlash vs MTP vs none on this box: decode tok/s and acceptance at
   512/4K/32K depth, plus **greedy losslessness** against the no-drafter baseline. Manages its
   own server on :8001, so it does not disturb production.
