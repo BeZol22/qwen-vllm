@@ -7,3 +7,5 @@
 - [KV dtype decision: stay on fp8](kv-dtype-decision-stay-on-fp8.md) — settled 2026-09-18; don't re-litigate NVFP4/TurboQuant without a new reason.
 - [vLLM 0.29 needs KV layout HND on the 5090](vllm-029-breaks-this-model.md) — without VLLM_KV_CACHE_LAYOUT=HND the model ignores the prompt; with it 0.29.0 is validated (166400 + prefix caching).
 - [Production is vLLM 0.29 + OpenCode pipeline](production-is-vllm-029-opencode-pipeline.md) — qwen38.service runs 0.29.0/166400 since 2026-09-19; 0.22 breaks parallel tool calls. Rollback unit saved.
+- [pip CUDA is not self-sufficient](pip-cuda-is-not-self-sufficient.md) — FlashInfer links `-L$CUDA_HOME/lib64 -lcudart`, which the pip wheels don't provide; NVFP4 GEMM compiles then fails to LINK on a box with no distro CUDA. Two symlinks, made by the launcher.
+- [A cold HF cache breaks the launcher](cold-cache-breaks-the-launcher.md) — `ls | head` under `pipefail` exits 2 and kills every serve script before `vllm serve`; the `|| true` is load-bearing.

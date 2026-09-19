@@ -13,8 +13,15 @@ d.text((40, 60), f"VISION CHECK: {SECRET}", fill=(20, 20, 20))
 buf = io.BytesIO(); img.save(buf, format="PNG")
 b64 = base64.b64encode(buf.getvalue()).decode()
 
+# Ask the server which model it is actually serving, instead of hardcoding a name
+# that goes stale every time the production model changes (it was still pointing at
+# nvidia/Qwen3.6-35B-A3B-NVFP4 long after qwen38 became production).
+MODEL = json.load(urllib.request.urlopen(
+    "http://localhost:8000/v1/models", timeout=30))["data"][0]["id"]
+print("Testing model:", MODEL)
+
 payload = {
-    "model": "nvidia/Qwen3.6-35B-A3B-NVFP4",
+    "model": MODEL,
     "messages": [{
         "role": "user",
         "content": [
@@ -23,13 +30,17 @@ payload = {
         ],
     }],
     "max_tokens": 50, "temperature": 0,
+    # Thinking mode is ON server-side for qwen38. Without this the reasoning tokens
+    # consume the whole max_tokens budget and `content` comes back empty -- the test
+    # would fail for a reason that has nothing to do with the vision path.
+    "chat_template_kwargs": {"enable_thinking": False},
 }
 req = urllib.request.Request(
     "http://localhost:8000/v1/chat/completions",
     data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"},
 )
 out = json.load(urllib.request.urlopen(req, timeout=120))
-answer = out["choices"][0]["message"]["content"]
+answer = out["choices"][0]["message"]["content"] or ""
 print("Model read:", repr(answer))
 print("PASS ✅ vision works" if SECRET in answer else "FAIL ❌ secret not read back")
 sys.exit(0 if SECRET in answer else 1)

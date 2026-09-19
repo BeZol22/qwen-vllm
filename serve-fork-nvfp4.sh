@@ -33,7 +33,7 @@ export MAX_JOBS="${MAX_JOBS:-4}"
 export VLLM_KV_CACHE_LAYOUT="${VLLM_KV_CACHE_LAYOUT:-HND}"
 
 MODEL="unsloth/Qwen3.8-27B-NVFP4"
-CHAT_TEMPLATE="$(ls "$HOME"/.cache/huggingface/hub/models--unsloth--Qwen3.8-27B-NVFP4/snapshots/*/chat_template.jinja 2>/dev/null | head -1)"
+CHAT_TEMPLATE="$(ls "$HOME"/.cache/huggingface/hub/models--unsloth--Qwen3.8-27B-NVFP4/snapshots/*/chat_template.jinja 2>/dev/null | head -1 || true)"
 CT_ARG=(); [ -n "$CHAT_TEMPLATE" ] && CT_ARG=(--chat-template "$CHAT_TEMPLATE")
 
 SPEC_ARG=()

@@ -35,7 +35,7 @@ source "$HOME/vllm-env/bin/activate"
 
 MODEL="unsloth/Qwen3.8-27B-NVFP4"
 # Use the model's own chat template if it ships one separately.
-CHAT_TEMPLATE="$(ls "$HOME"/.cache/huggingface/hub/models--unsloth--Qwen3.8-27B-NVFP4/snapshots/*/chat_template.jinja 2>/dev/null | head -1)"
+CHAT_TEMPLATE="$(ls "$HOME"/.cache/huggingface/hub/models--unsloth--Qwen3.8-27B-NVFP4/snapshots/*/chat_template.jinja 2>/dev/null | head -1 || true)"
 CT_ARG=(); [ -n "$CHAT_TEMPLATE" ] && CT_ARG=(--chat-template "$CHAT_TEMPLATE")
 
 # NOTE vs. the 3.6 scripts:

@@ -15,7 +15,7 @@ source "$HOME/vllm-env/bin/activate"
 
 MODEL="sakamakismile/Huihui-Qwen3.6-27B-abliterated-NVFP4-MTP"
 # Use the model's own chat template if it ships one separately.
-CHAT_TEMPLATE="$(ls "$HOME"/.cache/huggingface/hub/models--sakamakismile--Huihui-Qwen3.6-27B-abliterated-NVFP4-MTP/snapshots/*/chat_template.jinja 2>/dev/null | head -1)"
+CHAT_TEMPLATE="$(ls "$HOME"/.cache/huggingface/hub/models--sakamakismile--Huihui-Qwen3.6-27B-abliterated-NVFP4-MTP/snapshots/*/chat_template.jinja 2>/dev/null | head -1 || true)"
 CT_ARG=(); [ -n "$CHAT_TEMPLATE" ] && CT_ARG=(--chat-template "$CHAT_TEMPLATE")
 
 exec vllm serve "$MODEL" \

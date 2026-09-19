@@ -1,4 +1,7 @@
-# Rebuild from a freshly formatted Ubuntu
+# Rebuild from a freshly formatted box
+
+> On **Arch / Omarchy**, read [Arch / Omarchy deltas](#arch--omarchy-deltas) FIRST:
+> two steps below are no-ops there and one extra fix is mandatory.
 
 Everything needed to get back to the validated state of **2026-09-19**:
 vLLM **0.29.0** serving `unsloth/Qwen3.8-27B-NVFP4` on an RTX 5090 (32 GB, SM120),
@@ -10,7 +13,7 @@ Not in git (too big) - re-download or back up to an external disk BEFORE formatt
 
 | what | size | how to get it back |
 |---|---|---|
-| `~/.cache/huggingface/hub/models--unsloth--Qwen3.8-27B-NVFP4` | 22 GB | auto-downloads on first start |
+| `~/.cache/huggingface/hub/models--unsloth--Qwen3.8-27B-NVFP4` | 22 GB | auto-downloads on first start (needs the `\|\| true` fix, see [notes](docs/notes/cold-cache-breaks-the-launcher.md)) |
 | `models--nvidia--Qwen3.6-35B-A3B-NVFP4` | 22 GB | only for the old `serve-qwen35.sh` |
 | `models--sakamakismile--Huihui-Qwen3.6-27B-abliterated-NVFP4-MTP` | 20 GB | only for `serve-huihui.sh` |
 | `~/vllm-029-env` | 8 GB | step 3 below |
@@ -92,9 +95,12 @@ not "simplify away":
 ```bash
 ~/qwen-vllm/test-verbatim.py 8000      # must print VERBATIM: 8/8
 ~/qwen-vllm/test-longctx.py 150000     # needle retrieval, must PASS
-~/qwen-vllm/test-vision.py             # NOTE: still hardcodes an old model name; edit first
+~/qwen-vllm/test-vision.py             # asks /v1/models which model is serving
 ```
 Expected: ~6.46 GiB KV pool, "GPU KV cache size: ~173,000 tokens", ~650 MiB VRAM free.
+Worth adding to the battery: parallel tool calls (two `get_weather` calls in one
+turn) -- that is the whole reason production is 0.29 and not 0.22, and none of the
+three gates above would notice it regressing.
 
 ## 6. OpenCode + the agent pipeline
 
@@ -105,6 +111,53 @@ cd /path/to/project && opencode        # Tab -> orchestrator
 ```
 See `opencode-agents/README.md`. A working sample lives in
 `opencode-agents/example-project/`.
+
+## Arch / Omarchy deltas
+
+Validated on **Omarchy** (kernel 7.2.5-3, gcc 16.2.1, glibc 2.44, driver 610.57.04,
+60 GiB swap), 2026-09-19 -- same numbers as the Ubuntu box: pool 6.46 GiB,
+173,391 tokens, verbatim 8/8, retrieval PASS at 148,949, vision PASS, parallel
+tool calls OK. Warm restart 61 s.
+
+**Steps that do NOT apply:**
+* **Step 2 (Secure Boot / MOK)** -- Secure Boot was off on this install
+  (`bootctl status` -> `Secure Boot: disabled`), so there is no MOK to enroll and
+  no `mokutil` on the box. Check before assuming; if it is ON, the Ubuntu
+  procedure still applies via `sbctl`, not `mokutil`.
+* **Step 2 (driver install)** -- Omarchy ships the 610 driver already. Verify with
+  `nvidia-smi` and only act if it is missing or < 610.
+* **`apt`** -- `sudo pacman -S --needed <pkg>`. Nothing in step 0 is needed
+  beyond what Omarchy already has (git, curl, base-devel).
+
+**The one MANDATORY extra fix (step 3a companion):** the pip CUDA wheels are not
+linkable on a box with no distro CUDA toolkit. FlashInfer compiles the NVFP4 GEMM
+and then fails to **link** it with `ld: cannot find -lcudart`, ~4 min into startup.
+`serve-qwen38-029.sh` now creates the two missing symlinks itself, so a clone of
+this repo needs no manual action -- but if you write a new launcher, carry them
+over. Full story: [`docs/notes/pip-cuda-is-not-self-sufficient.md`](docs/notes/pip-cuda-is-not-self-sufficient.md).
+
+**gcc:** CUDA 13.4.92's guard is `#if __GNUC__ > 16`, so **gcc 16 is supported** --
+no `gcc15` needed today. When Arch moves to **gcc 17 this becomes a hard stop**;
+then `sudo pacman -S gcc15` and add `-ccbin /usr/bin/g++-15` via
+`NVCC_PREPEND_FLAGS`. Verify with:
+
+```bash
+N=~/vllm-029-env/lib/python3.12/site-packages/nvidia/cu13
+printf '#include <cuda_runtime.h>\n#include <vector>\n__global__ void k(){}\nint main(){cudaFree(0);}\n' > /tmp/g.cu
+$N/bin/nvcc -gencode=arch=compute_120f,code=sm_120f -std=c++17 /tmp/g.cu -o /tmp/g.bin && echo HOST COMPILER OK
+```
+
+**Host RAM:** this install has **60 GiB of swap**, not 8 GiB, so the FlashInfer
+JIT host-OOM described in `serve-qwen38-029.sh` has far more margin. `MAX_JOBS=4`
+stays anyway -- it costs only cold-start latency
+([[host-ram-is-the-other-ceiling]]).
+
+**Paths:** the scripts, units and desktop launchers assume `~/qwen-vllm`. If you
+clone elsewhere (e.g. `~/Documents/qwen-vllm`), symlink rather than edit paths:
+
+```bash
+ln -sfn ~/Documents/qwen-vllm ~/qwen-vllm
+```
 
 ## What was tried and rejected (do not repeat)
 All in `docs/notes/` - the short version:

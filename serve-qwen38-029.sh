@@ -12,6 +12,20 @@ export HF_HOME="${HF_HOME:-$HOME/.cache/huggingface}"
 CUDA_HOME="$(dirname "$(dirname "$(find "$HOME/vllm-029-env" -name nvcc -path '*cu13*' -type f 2>/dev/null | head -1)")")"
 export CUDA_HOME
 export PATH="$CUDA_HOME/bin:$PATH"
+
+# MANDATORY on a pip-only CUDA (no system toolkit, e.g. Arch/Omarchy). FlashInfer's
+# generated build.ninja hardcodes  -L$cuda_home/lib64  -lcudart  -lcuda, but the pip
+# wheels lay out "lib/" (not "lib64/") and ship only the SONAME libcudart.so.13 --
+# no unversioned dev symlink. All 16 NVFP4 GEMM translation units then compile fine
+# and the LINK fails with "/usr/bin/ld: cannot find -lcudart", which surfaces as
+# "Ninja build failed" + engine-core death ~4 min into startup. A distro CUDA
+# toolkit masks this by putting a linkable libcudart.so on ld's default path, which
+# is why Ubuntu never hit it. -lcuda resolves from the driver (/usr/lib/libcuda.so)
+# and needs nothing. These two symlinks live in site-packages, so pip reinstalling
+# any nvidia-* wheel silently removes them -- recreate here, idempotently, rather
+# than as a one-off manual step.
+[ -e "$CUDA_HOME/lib64" ] || ln -sfn lib "$CUDA_HOME/lib64"
+[ -e "$CUDA_HOME/lib/libcudart.so" ] || ln -sf libcudart.so.13 "$CUDA_HOME/lib/libcudart.so"
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 # ===== vLLM 0.29.0 variant of serve-qwen38.sh (validated 2026-09-19) =====
@@ -49,7 +63,12 @@ source "$HOME/vllm-029-env/bin/activate"
 
 MODEL="unsloth/Qwen3.8-27B-NVFP4"
 # Use the model's own chat template if it ships one separately.
-CHAT_TEMPLATE="$(ls "$HOME"/.cache/huggingface/hub/models--unsloth--Qwen3.8-27B-NVFP4/snapshots/*/chat_template.jinja 2>/dev/null | head -1)"
+# The "|| true" is LOAD-BEARING on a fresh install: with an empty HF cache this
+# glob matches nothing, ls exits 2, pipefail propagates it and set -e kills the
+# script BEFORE vllm serve runs -- so the model can never auto-download and the
+# unit just logs "status=2/INVALIDARGUMENT" with no output. Cost an Omarchy
+# rebuild on 2026-09-19; invisible on any box whose cache is already warm.
+CHAT_TEMPLATE="$(ls "$HOME"/.cache/huggingface/hub/models--unsloth--Qwen3.8-27B-NVFP4/snapshots/*/chat_template.jinja 2>/dev/null | head -1 || true)"
 CT_ARG=(); [ -n "$CHAT_TEMPLATE" ] && CT_ARG=(--chat-template "$CHAT_TEMPLATE")
 
 # NOTE vs. the 3.6 scripts:
