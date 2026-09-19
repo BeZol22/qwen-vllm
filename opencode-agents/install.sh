@@ -20,6 +20,20 @@ fi
 mkdir -p "$DEST"
 cp -v "$HERE"/agents/*.md "$DEST/"
 
+# OpenCode globs BOTH spellings -- `{agent,agents}/**/*.md` -- and on a name clash
+# the PLURAL copy wins (measured on v2.0.10). `agents/` is also what the docs say,
+# so that is where we install; but an older singular copy left beside it is now
+# silently dead, which reads exactly like "my edit did nothing".
+SIBLING="$(dirname "$DEST")/agent"
+if [ -d "$SIBLING" ]; then
+  for f in "$HERE"/agents/*.md; do
+    b="$(basename "$f")"
+    if [ -e "$SIBLING/$b" ]; then
+      echo "SHADOWED: $SIBLING/$b is now dead -- $DEST/$b wins. Delete it."
+    fi
+  done
+fi
+
 if [ -n "$PROVIDER" ] && [ "$TARGET" != "--global" ]; then
   SRC="$HERE/providers/opencode.$PROVIDER.json"
   [ -f "$SRC" ] || SRC="$HERE/providers/opencode.$PROVIDER.example.json"

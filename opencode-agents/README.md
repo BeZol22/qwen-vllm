@@ -45,6 +45,13 @@ configured with, so the same files work at home and at work.
 ./install.sh /path/to/project windows    # + opencode.json for the Windows llama.cpp box
 ```
 
+Agents go in **`agents/`, plural** - that is what OpenCode's docs say, and on a
+name clash it is the copy that wins. OpenCode actually globs both spellings
+(`{agent,agents}/**/*.md`, measured on v2.0.10), so a hand-made `agent/` copy
+beside an installed `agents/` one is silently dead weight; `install.sh` prints
+`SHADOWED:` for every such file rather than leaving you to wonder why an edit
+did nothing.
+
 At work, if OpenCode already has the company model configured, the first form is
 all you need. Otherwise use `work`, replace `REPLACE-WITH-SERVED-MODEL-NAME`
 (three places; it must equal the name the server reports at `/v1/models`) and:

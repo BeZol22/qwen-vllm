@@ -4,7 +4,7 @@ description: Since 2026-09-19 the qwen38 service runs vLLM 0.29.0 (166400 ctx, p
 metadata:
   node_type: memory
   type: project
-  modified: 2026-09-19T02:00:00.000Z
+  modified: 2026-09-19T21:30:00.000Z
 ---
 
 **`qwen38.service` now runs `~/qwen-vllm/serve-qwen38-029.sh`** (vLLM 0.29.0 in
@@ -23,6 +23,35 @@ things made 0.29 mandatory, not just nicer:
   the subagent with `Expected 'function.name' to be a string`. Planner survived
   (serial calls), coder died on turn one every time. 0.29.0: 3 in, 3 out, clean.
 * Prefix caching (2 s vs ~60 s on a repeated 159K prompt) suits the resend-heavy loop.
+
+## Where agent files live: `agents/`, plural -- and it shadows the singular
+
+MEASURED on opencode **v2.0.10**, because two spellings are in circulation and
+guessing wrong is silent. The loader globs **both**:
+
+```
+{agent,agents}/**/*.md    subagents (primary: false)
+{mode,modes}/*.md         primary agents
+```
+
+so `~/.config/opencode/agent/` and `~/.config/opencode/agents/` are both read, and
+`opencode-agents/install.sh` writing the plural was never broken. Two things are
+worth not re-deriving:
+
+* **On a name clash the PLURAL copy wins.** Verified by putting the same `coder.md`
+  in both dirs with different `description:` fields, across service restarts: one
+  `coder` is loaded, always the one from `agents/`. So a leftover singular copy is
+  dead weight, and editing it looks like OpenCode ignoring your changes. `install.sh`
+  now prints `SHADOWED:` for each such file. Plural is also what OpenCode's own docs
+  give, for global and project scope alike, which settles which one to keep.
+* `**/` matches zero directories here, so files sitting directly in `agents/` load;
+  they do not need a subdirectory.
+
+**The check itself has a trap.** `opencode debug agents` is answered by the
+background service (`opencode serve --service`), and right after that service is
+killed or restarted it returns `[]` -- not an error, just an empty list. Two
+separate conclusions here were wrong because of it. Call it until it returns the
+built-ins (`Build`, `Plan`, `Title`, ...) before believing anything it says.
 
 The work deployment has the same model with a ~130K window, so the template is sized
 for that: file-based handoff in `.pipeline/`, capped subagent reports, no `model:`

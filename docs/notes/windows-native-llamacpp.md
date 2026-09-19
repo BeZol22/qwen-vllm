@@ -325,6 +325,11 @@ New-Item -ItemType Directory -Force -Path "$dest\agents" | Out-Null
 Copy-Item opencode-agents\agents\*.md "$dest\agents\"
 ```
 
+`agents` there is plural on purpose: OpenCode globs `{agent,agents}/**/*.md` and
+the plural copy wins a name clash, so a hand-made singular `agent\` directory
+beside it would be silently dead. Measured in
+[[production-is-vllm-029-opencode-pipeline]].
+
 Verified 2026-09-19 on opencode v2.0.10: `opencode models` lists
 `local-llamacpp/qwen3.8-27b`, and `opencode run` answers through the
 orchestrator agent. (An editor may warn that the `$schema` URL is untrusted —
