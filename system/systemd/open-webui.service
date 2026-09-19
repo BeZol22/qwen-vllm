@@ -1,0 +1,17 @@
+[Unit]
+Description=Open WebUI (phone/tablet front end for the local Qwen server)
+# Wants, not Requires: the UI is useful even while qwen38 restarts -- it just
+# shows no models until the backend is back.
+After=network-online.target qwen38.service
+Wants=network-online.target qwen38.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/env bash %h/qwen-vllm/serve-openwebui.sh
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=300
+KillMode=mixed
+
+[Install]
+WantedBy=default.target

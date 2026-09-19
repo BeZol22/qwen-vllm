@@ -202,6 +202,52 @@ turns, not for two jumbo prompts.
 Raising to 4 would cost ~456 MiB and require `--max-model-len` to drop by roughly
 12,800 tokens. Re-run the gates if you do it.
 
+## 8. Phones and tablets: Open WebUI
+
+vLLM serves a raw API, which is useless on a phone. `serve-openwebui.sh` +
+`open-webui.service` put a chat UI in front of it, so any device on the LAN just
+opens a URL in Safari. Installed 2026-09-19, Open WebUI 0.11.3.
+
+```bash
+~/.local/bin/python3.12 -m venv ~/open-webui-env
+~/open-webui-env/bin/pip install open-webui          # ~7.6 GB, bundles its own ML stack
+~/qwen-vllm/restore.sh                               # installs open-webui.service too
+sudo ufw allow from 192.168.178.0/24 to any port 3000 proto tcp comment 'open-webui LAN'
+systemctl --user enable --now open-webui
+```
+
+Then from any iPhone/iPad/Mac on the LAN:
+
+```
+http://omarchy.local:3000        # iOS resolves .local via Bonjour natively
+http://192.168.178.75:3000
+```
+
+Safari -> Share -> **Add to Home Screen** makes it behave like an app. The FIRST
+account created becomes the admin; everyone else signs up and gets their own
+chat history.
+
+**Settings that are deliberate, not defaults:**
+* `ENABLE_OLLAMA_API=False` -- Open WebUI probes for Ollama on :11434 otherwise
+  and every page load eats that timeout.
+* `OPENAI_API_BASE_URL=http://127.0.0.1:8000/v1` -- it is a CLIENT of qwen38, over
+  loopback, so this never touches the LAN rules.
+* `HOST=0.0.0.0` -- IPv4 only, same reasoning as qwen38 (see "Keep `--host
+  0.0.0.0`"). Do not switch to `::`.
+* `WEBUI_AUTH=True` -- **do not** set False to skip the login screen: it makes
+  every visitor the SAME user, so all phones would share one conversation history.
+* `DATA_DIR=~/.local/share/open-webui` -- the SQLite DB and uploads live outside
+  the venv so reinstalling cannot destroy them. **Back this up**, it is the chat
+  history; it is not in git.
+
+**Measured:** 2.30 GiB RSS and **zero VRAM** -- `nvidia-smi` shows only
+`VLLM::EngineCore`, so the UI never competes with the model for the 5090.
+
+**Privacy note:** inference is 100% local, but Open WebUI itself makes OUTBOUND
+calls to huggingface.co on first run to fetch its RAG embedding model
+(`all-MiniLM-L6-v2`). That is outbound only and does not make anything reachable
+from the internet; the inbound rules are unchanged.
+
 ## Arch / Omarchy deltas
 
 Validated on **Omarchy** (kernel 7.2.5-3, gcc 16.2.1, glibc 2.44, driver 610.57.04,

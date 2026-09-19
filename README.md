@@ -12,6 +12,7 @@ decoding, vision, tool calling - plus an **OpenCode multi-agent coding pipeline*
 | [`docs/notes/`](docs/notes/) | the measurements and dead ends behind every number (start with `MEMORY.md`) |
 
 ## Layout
+- `serve-openwebui.sh` - chat UI on :3000 for phones/tablets (client of qwen38, no GPU).
 - `serve-*.sh` - launchers. `serve-qwen38-029.sh` = production; `serve-qwen38.sh` = previous
   vLLM 0.22 setup (190,400 ctx, but broken parallel tool calls); others are older models.
 - `start-model.sh` / `stop-model.sh` - desktop-button wrappers around the systemd units.
