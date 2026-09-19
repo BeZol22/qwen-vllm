@@ -35,8 +35,33 @@ available (below). The reason survives anyway:
   raising a clean `torch.OutOfMemoryError`, so the measure-to-the-edge method
   behind [[gpu-memory-utilization-locked]] loses its signal.
 
-`llama-server` sits at ~1–2 GB of host RAM with no VM at all, and LAN exposure is
-one firewall rule instead of mirrored networking. That is the whole argument.
+`llama-server` runs with no VM at all, and LAN exposure is one firewall rule
+instead of mirrored networking. That is the whole argument.
+
+**Host RAM, MEASURED in service 2026-09-19 — an earlier draft of this note said
+"~1–2 GB" and that was wrong:**
+
+| metric | value |
+|---|---|
+| WorkingSetPrivate (the honest figure) | **7.28 GB** |
+| WorkingSet (resident, incl. file-backed) | 24.51 GB |
+| PrivateMemorySize64 (committed VA, incl. reservations) | 35.27 GB |
+| model files on disk | 21.58 GB |
+
+Read the right column. **7.28 GB private resident** is the real steady-state
+cost; the 24.51 GB working set is mostly the memory-mapped model file, which is
+file-backed and evictable rather than private commit, and the 35.27 GB
+`PrivateMemorySize64` is committed *address space* including mmap reservations —
+not memory pressure, and the number most likely to cause a false alarm.
+
+This still beats WSL2 comfortably (vLLM's ~10.4 GiB anonymous load peak, plus
+the VM, plus the FlashInfer JIT), but the margin is smaller than claimed: 7.28
+alongside 20+ GB of containers is roughly 27 of 31 GiB. Expect the mmapped model
+pages to be evicted under that pressure. With `--n-gpu-layers 99` the weights
+are served from VRAM and the host copy is only needed during load, so eviction
+should cost nothing after startup — *should*, on reasoning, not measured under
+real container pressure. If the box thrashes, that assumption is the first thing
+to test.
 
 ## Quant selection: why not NVFP4, and why not Q4_0
 
