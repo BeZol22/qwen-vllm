@@ -13,13 +13,22 @@ outputs. The drafter only proposes; the 27B verifies every token. So at
 temperature 0 the output with a drafter should match the output without one.
 Anything else means the drafter path is buggy, not "slightly worse".
 
-  CAVEAT, stated because the gate would otherwise over-claim: exact equality is
-  the EXPECTATION, not a hard guarantee. Verification runs the target at
-  different batch shapes than plain decoding, and float non-associativity can
-  flip a near-tie logit. So this reports WHERE divergence starts:
-     identical              -> PASS
-     diverges late (>80%)   -> WARN, plausibly float noise
-     diverges early / fully -> FAIL, treat as a real bug
+  MEASURED 2026-09-19, and it revised this test's own design. Both drafters
+  diverge from the no-drafter baseline EARLY (24-47% in) on free-form output --
+  but the 'none-b' control (byte-identical flags to 'none') is identical at all
+  depths, so llama.cpp IS deterministic run to run and the divergence is really
+  the drafter. Inspecting it: every divergence sat inside the model's REASONING
+  text and was a paraphrase reaching the same conclusion, with the same final
+  code. Mechanism: verification runs the target at a different batch shape than
+  1-token decode, so float reduction order differs and near-tie logits flip.
+  Chain-of-thought is near-tie-dense from its first sentence, which is why
+  divergence is early rather than late -- an earlier version of this gate
+  assumed the opposite and failed both drafters for normal behaviour.
+
+  So free-form string divergence is REPORTED, NOT FAILED. The gate is the
+  verbatim battery: constrained single-answer output, where exact equality does
+  have to hold and where a genuinely broken drafter would show up. Note this
+  measures correctness, not quality -- no quality benchmark has been run here.
 
 It also runs the 8-passphrase verbatim battery from test-verbatim.py per mode,
 because losslessness against a broken baseline would still pass.
@@ -65,11 +74,20 @@ BASE_ARGS = [
     "--cache-type-k", "q8_0", "--cache-type-v", "q8_0",
     "--metrics",
     "--jinja",
+    # 127.0.0.1 EXPLICITLY, and every client URL below uses the literal too:
+    # "localhost" resolves to ::1 first on this box and llama-server binds IPv4
+    # only, so a localhost health check is refused and the wait loop times out.
+    "--host", "127.0.0.1",
     "--temp", "0",
 ]
 
 SPEC_ARGS = {
     "none": [],
+    # DETERMINISM CONTROL: byte-identical flags to "none". If this row also
+    # diverges from "none", llama.cpp simply is not run-to-run deterministic at
+    # these settings, and a drafter's divergence proves nothing about the
+    # drafter. Without this control the losslessness verdict is unfounded.
+    "none-b": [],
     "mtp": ["--model-draft", MTP, "--spec-type", "draft-mtp", "--spec-draft-n-max", "2"],
     "dflash": ["--model-draft", DFLASH, "--spec-type", "draft-dflash", "--spec-draft-n-max", "5"],
 }
@@ -123,7 +141,7 @@ class Server(object):
                 raise RuntimeError("llama-server exited during load (%s) -- see %s"
                                    % (self.proc.returncode, self.log_path))
             try:
-                urllib.request.urlopen("http://localhost:%d/health" % self.port, timeout=2)
+                urllib.request.urlopen("http://127.0.0.1:%d/health" % self.port, timeout=2)
                 return self
             except Exception:
                 time.sleep(2)
@@ -152,7 +170,7 @@ def chat(port, content, max_tokens):
         "timings_per_token": True,
     }
     req = urllib.request.Request(
-        "http://localhost:%d/v1/chat/completions" % port,
+        "http://127.0.0.1:%d/v1/chat/completions" % port,
         data=json.dumps(payload).encode(),
         headers={"Content-Type": "application/json"})
     t0 = time.time()
@@ -286,16 +304,19 @@ def main():
                 frac = i / float(max(1, len(x)))
                 notes.append("d%d@%d(%.0f%%)" % (d, i, 100 * frac))
                 worst = frac if worst is None else min(worst, frac)
+            # Reported, never failed -- see the module docstring. A drafter that
+            # is actually broken shows up in the verbatim column, not here.
             if worst is None:
-                verdict = "PASS  identical at all depths"
-            elif worst > 0.8:
-                verdict = "WARN  late divergence, plausibly float noise: " + " ".join(notes)
+                verdict = "identical at all depths"
             else:
-                verdict = "FAIL  early divergence: " + " ".join(notes)
-                failed = True
+                verdict = "diverges (reasoning paraphrase): " + " ".join(notes)
         print("%-14s %-10s %s" % (m, v, verdict))
 
-    print("\nlogs: bench-<mode>.log   (check the DFlash block size reported at load)")
+    # Persist every generation so a divergence can be read rather than guessed at.
+    with open("bench-texts.json", "w", encoding="utf-8") as f:
+        json.dump({m: {str(d): results[m]["texts"][d] for d in DEPTHS} for m in results},
+                  f, ensure_ascii=False, indent=1)
+    print("\nlogs: bench-<mode>.log   texts: bench-texts.json")
     sys.exit(1 if failed else 0)
 
 

@@ -101,16 +101,66 @@ which is the direction that matters for agentic coding at depth. There is also a
 known upstream weakness on exactly this architecture family: llama.cpp issue
 **#23322, "Low MTP Draft Acceptance Rate with SWA/Hybrid Memory Models"**.
 
-**Those numbers are speed only.** The study says so itself: *"No accuracy
-measurement at all."* That is why [`bench-drafters.py`](../../bench-drafters.py)
-exists — see below. Two further unknowns it should settle: nobody has run an
-unsloth *target* against a ggml-org *drafter* (should be fine, drafters are
-independent of target quantisation and the vocab matches), and ggml-org's file
-carries no version in its name, so whether it is DFlash1 or DFlash2 and what
-`dflash.block_size` it enforces must come from the startup log, not assumption.
+### MEASURED ON THIS BOX, 2026-09-19
+
+llama.cpp **b11053**, UD-Q5_K_M target, q8_0 KV, ctx 131072, vision off,
+400 output tokens per sample, via `bench-drafters.py`:
+
+| depth | none | MTP (n=2) | DFlash (n=5) |
+|---|---|---|---|
+| 512 | 67.7 tok/s | 126.2 (1.86×) | **171.3 (2.53×)** |
+| 4,096 | 67.6 tok/s | 125.2 (1.85×) | **147.6 (2.18×)** |
+| 32,768 | 62.4 tok/s | 100.4 (1.61×) | **150.3 (2.41×)** |
+| acceptance | — | 67.9% | 57.4% |
+
+**DFlash wins at every depth** — by 37% / 21% / 43%. The published choice holds,
+but two details did not transfer and are worth not re-deriving:
+
+* **MTP's acceptance here is 67.9%, far above the published 48%, and it BEATS
+  DFlash's 57.4% — yet DFlash is much faster.** Acceptance *rate* is the wrong
+  figure of merit: DFlash drafts far more tokens per step (470–567 vs MTP's
+  324–363), so a lower rate still yields more accepted tokens per step.
+* **The "advantage grows with context" curve did not reproduce.** Both are
+  flat-to-declining here; what actually happens is that MTP *degrades* with
+  depth (1.86× → 1.61×) while DFlash roughly holds (2.53× → 2.41×). The
+  comparison's direction survives, its shape does not.
+
+Also settled: ggml-org's unversioned drafter reports `block_size=8,
+mask_token_id=248070, n_extract=5, sample_from_anchor=true` at load — same as
+the benchmarked DFlash2 checkpoint, so n-max caps at 7 and **n-max 5 is in
+range**. And the unsloth target against the ggml-org drafter works fine.
+
+### Speculative decoding is NOT bit-exact here, and that is fine
+
+The accuracy axis the published study skipped, measured: **verbatim battery 8/8
+for every mode**, but on free-form output both drafters diverge from the
+no-drafter baseline *early* — 24–47% in, reproducibly, at the same offsets
+across independent runs.
+
+That is not a defect, and the control is what proves it. A `none-b` run with
+byte-identical flags to `none` is **identical at all depths**, so llama.cpp is
+deterministic run to run and the divergence really is the drafter. Reading the
+diffs: every one sat inside the model's **reasoning** text and was a paraphrase
+reaching the same conclusion, with the same final code.
+
+Mechanism: verification runs the target at a different batch shape than 1-token
+decode, so float reduction order differs and near-tie logits flip. Chain-of-
+thought is near-tie-dense from its first sentence, which is why divergence is
+early rather than late. An earlier version of the gate assumed the opposite
+(late = noise, early = bug) and failed both drafters for normal behaviour; it
+now reports free-form divergence and gates on the verbatim battery instead,
+where exact equality does have to hold.
+
+**This measures correctness, not quality.** No quality benchmark was run, and
+four inspected divergences are not a quality study. If output ever seems worse
+with a drafter, `$env:QWEN_SPEC = 'none'` is the control to reach for first.
 
 `serve-llamacpp.sh` still says *"No MTP (llama.cpp has none)"* — out of date, and
 applies only to the Qwen3.6 NEO-CODE model it launches.
+
+Incidentally, b11053's `--spec-type` also accepts `draft-eagle3`, **`draft-dspark`**
+and several `ngram-*` variants; the Jetson AI Lab page claiming DSpark is
+vLLM-only is out of date. Untested here, no checkpoint downloaded.
 
 ## Vision, and the Playwright trap
 
