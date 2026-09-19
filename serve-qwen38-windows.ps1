@@ -244,6 +244,18 @@ $ArgList = @(
   # MANDATORY for Qwen3-family XML tool calls. Without --jinja, OpenCode's tool
   # use silently degrades to prose. This is the most likely thing to break here.
   '--jinja',
+  # PATCHED CHAT TEMPLATE, required for Claude Code against /v1/messages.
+  # The template baked into the GGUF does this at line 110:
+  #     {{- raise_exception('System message must be at the beginning.') }}
+  # so ANY system-role message after the first turn is a hard 500:
+  #     "Jinja Exception: System message must be at the beginning."
+  # Claude Code injects system messages mid-conversation (its system-reminder
+  # mechanism), so every such request fails. OpenCode never triggers it, which
+  # is why this surfaced only when Claude Code was pointed at the box.
+  # The patch renders that message as an ordinary ChatML system turn instead of
+  # raising -- strictly more permissive, so nothing that worked before changes.
+  # Verified after the swap: test-agentic.py still 8/8.
+  '--chat-template-file', (Join-Path $PSScriptRoot 'system\chat-templates\qwen3.8-27b-midsystem.jinja'),
   # Qwen's recommended thinking-mode sampling, same values as the vLLM
   # --override-generation-config. Defaults only; OpenCode can override per request.
   '--temp', '1.0', '--top-p', '0.95', '--top-k', '20', '--repeat-penalty', '1.0'
