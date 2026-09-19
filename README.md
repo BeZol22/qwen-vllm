@@ -26,6 +26,9 @@ decoding, vision, tool calling - plus an **OpenCode multi-agent coding pipeline*
 - `start-model.sh` / `stop-model.sh` - desktop-button wrappers around the systemd units.
 - `test-verbatim.py`, `test-longctx.py`, `test-vision.py` - correctness gates. Run them after
   ANY change to vLLM version, KV dtype, driver or flags; a clean startup proves nothing.
+- `test-agentic.py` - the Windows path's two big risks: XML tool calling at depth (to 92K
+  tokens) and the Playwright shape (image -> tool call -> tool result -> tool call). Needs a
+  running server; start the launcher first so it tests the production config.
 - `system/` - systemd units, desktop launchers, `pip freeze` of both envs. `restore.sh` installs them.
 - `docs/legacy-qwen36-setup.md` - the original Qwen3.6 setup guide (historical; its
   "utilization 0.90 is fixed" rule is superseded, see `docs/notes/`).

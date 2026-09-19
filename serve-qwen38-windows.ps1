@@ -160,7 +160,19 @@ if ($env:QWEN_VISION -ne '0') {
   # still covers a 1280x720 viewport shot at roughly native resolution.
   # Raise only if the model starts missing genuine UI detail; every extra image
   # token is context the agent loses for code.
-  $VisionArgs = @('--mmproj', $MmProj, '--image-max-tokens', '1280')
+  # --image-min-tokens 1024 is NOT optional, and it is not symmetry with the cap.
+  # llama.cpp warns at load: "Qwen-VL models require at minimum 1024 image tokens
+  # to function correctly on grounding tasks". MEASURED 2026-09-19: without the
+  # floor, a 1280x320 banner lands at ~400 image tokens (32x32 px/token) and the
+  # model misread MARBLE-SIPHON-4417 as MARBLE-SIPHON-417 -- a dropped digit, on
+  # an image a human reads instantly, and inconsistently (the same image read
+  # correctly in the two tool-calling turns). Grounding is exactly what Playwright
+  # work needs: finding a button, judging alignment. With the floor, 8/8.
+  # The 1024-1280 band is deliberate: the floor keeps grounding reliable, the
+  # ceiling still stops a full-page capture from eating the context window.
+  $VisionArgs = @('--mmproj', $MmProj,
+                  '--image-min-tokens', '1024',
+                  '--image-max-tokens', '1280')
 }
 
 # --- context -----------------------------------------------------------------
@@ -238,6 +250,18 @@ Write-Host "drafter      : $SpecState"
 Write-Host "vision       : $VisionState"
 Write-Host "LAN endpoint : http://192.168.178.75:8000/v1   <- point OpenCode here"
 Write-Host ''
+
+# MANDATORY, and it cost a debugging round: llama-server writes its NORMAL logs
+# to stderr, and PowerShell 5.1 wraps every stderr line from a native exe in a
+# NativeCommandError ErrorRecord whenever the stream is redirected. With
+# ErrorActionPreference still 'Stop', the FIRST ordinary log line ("llama_server:
+# initializing ...") becomes a terminating error and kills this script before the
+# model even loads -- exit 1, with the real cause buried in a PowerShell parser
+# trace rather than in any llama.cpp output. It does not reproduce when running
+# interactively with no redirection, so it surfaces exactly where it hurts: under
+# a service wrapper (NSSM, Task Scheduler) or any `*>` / `2>&1` capture.
+# All path validation above is done by now, so Stop has served its purpose.
+$ErrorActionPreference = 'Continue'
 
 & $LlamaBin @ArgList
 exit $LASTEXITCODE

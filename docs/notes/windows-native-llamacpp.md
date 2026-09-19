@@ -203,45 +203,67 @@ more than the speed.
 ## How to apply
 
 Run `serve-qwen38-windows.ps1`; its header carries the one-time setup (binaries,
-the three model files, firewall). Four things to verify, ordered by how likely
-they are to sink the deployment:
+the four model files, firewall).
 
-1. **Qwen3 XML tool calling at large prompts.** `--jinja` is mandatory for
-   Qwen3-family XML tool calls. llama.cpp issue #26530 reports XML tool calls
-   failing to trigger on large prompts after the June 2026 AC-parser change
-   (PR #24869); older builds fell back to a JSON-array grammar that was followed
-   more reliably. **Test with a real OpenCode session at 50K+ tokens, not a toy
-   call.** If it fails, this is the thing that sends us back to WSL2.
-2. **Images and tool calls in the SAME conversation.** This is the Playwright MCP
-   shape and it is not the same test as either alone — a screenshot returns as a
-   tool result, gets reasoned over, then another tool call follows. Upstream also
-   injects a system message under `--jinja` when tools are present ("Respond in
-   JSON format, either with tool_call...") which is known to upset some
-   templates. Drive one real Playwright loop end to end.
-3. **The drafter choice, on this box.** Run
-   [`bench-drafters.py`](../../bench-drafters.py) — it launches its own server
-   per mode on port 8001 (so production on :8000 is undisturbed), holds
-   everything but the drafter flags fixed, and reports **both** axes:
+### The two big risks: BOTH CLEARED, measured 2026-09-19
 
-   * **speed** — decode tok/s at 512 / 4K / 32K depth, speedup vs no drafter,
-     and true acceptance from the `draft_n` / `draft_n_accepted` timings fields.
-   * **accuracy** — *greedy losslessness*, which is the right test rather than a
-     benchmark score: the drafter only proposes, the 27B verifies every token,
-     so at temperature 0 the output must match the no-drafter baseline. Exact
-     equality is the expectation, not a hard guarantee — verification runs the
-     target at different batch shapes and float non-associativity can flip a
-     near-tie logit — so the gate reports *where* divergence starts: identical =
-     PASS, after 80% = WARN (plausibly float noise), early = FAIL. The
-     8-passphrase verbatim battery runs per mode too, since losslessness against
-     a broken baseline would still pass.
+`test-agentic.py`, against the real launcher config, **8/8**:
 
-   `--sweep 3,5,7` sweeps DFlash's n-max. If DFlash does not win here, switch
-   with `$env:QWEN_SPEC = 'mtp'` and record the numbers in this note.
-4. **The gates.** `test-verbatim.py`, `test-longctx.py` and `test-vision.py` all
-   point at an OpenAI-compatible endpoint, so they run against `llama-server`
-   unchanged — `test-vision.py` is no longer optional, it covers the single-image
-   and 8-image cases this deployment depends on. Only raise `--ctx-size` after
-   they pass. A clean startup proves nothing; that lesson transfers intact.
+1. **Qwen3 XML tool calling at depth — issue #26530 does NOT reproduce** on
+   b11053 with this model. A proper `tool_calls` structure with the right
+   function and argument came back at every depth tested: 360 / 7,891 / 30,484 /
+   60,591 and **92,262 real prompt tokens**. This was ranked the most likely
+   thing to sink the deployment. It did not. `--jinja` remains mandatory.
+2. **The Playwright MCP shape works end to end** — image in, tool call carrying
+   a value read from the image, tool result fed back, second tool call. Vision
+   does not break tool calling, and the system message upstream injects under
+   `--jinja` ("Respond in JSON format, either with tool_call...") does not upset
+   this template.
+
+**But it found a real defect, and the fix is `--image-min-tokens 1024`.**
+Without the floor the model read a rendered `MARBLE-SIPHON-4417` as
+`MARBLE-SIPHON-417` — a dropped digit on an image a human reads instantly — and
+*inconsistently*, since the same image read correctly in the two tool-calling
+turns. That inconsistency is worse than a clean failure: a UI check would
+silently pass on the wrong value. Cause: a 1280x320 banner at 32x32 px/token is
+~400 image tokens, well under the 1024 that llama.cpp warns about at load
+("Qwen-VL models require at minimum 1024 image tokens to function correctly on
+grounding tasks"). Setting the floor turned 7/8 into 8/8. Grounding is precisely
+what Playwright work needs, so **a ceiling without a floor is a misconfiguration
+here, not a half-measure.**
+
+### Re-running the gates
+
+* [`test-agentic.py`](../../test-agentic.py) — the two risks above. Assumes a
+  running server (start the launcher first, so it exercises the production
+  config rather than a hand-built one). Re-run it after any llama.cpp bump:
+  multimodal and the tool-call parser are the two fastest-moving things here.
+* [`bench-drafters.py`](../../bench-drafters.py) — the drafter comparison,
+  results recorded above. Manages its own server per mode on port 8001, so
+  production on :8000 is undisturbed. `--sweep 3,5,7` sweeps DFlash's n-max.
+  If DFlash ever stops winning, `$env:QWEN_SPEC = 'mtp'` and record why here.
+* `test-verbatim.py`, `test-longctx.py`, `test-vision.py` — the original gates.
+  They point at an OpenAI-compatible endpoint, so they run against
+  `llama-server` unchanged. Only raise `--ctx-size` after they pass; a clean
+  startup proves nothing, and that lesson transfers intact.
+
+### Two Windows-specific traps, both cost a debugging round
+
+* **The launcher killed itself under output redirection.** `llama-server` writes
+  its NORMAL logs to stderr, and PowerShell 5.1 wraps every stderr line from a
+  native exe in a `NativeCommandError` whenever the stream is redirected — so
+  with `$ErrorActionPreference = 'Stop'` still in force, the first ordinary log
+  line ("llama_server: initializing ...") became fatal and the script exited 1
+  before the model loaded, with the cause buried in a PowerShell parser trace.
+  It does NOT reproduce interactively, only under `*>` / `2>&1` or a service
+  wrapper — i.e. exactly where it hurts. The launcher now drops back to
+  `Continue` immediately before invoking the binary, after path validation.
+* **`localhost` resolves to `::1` first on this box** while `llama-server` binds
+  IPv4 only, so a `localhost` health check is refused. Everything here uses the
+  `127.0.0.1` literal. This is the same IPv6-before-IPv4 trap the vLLM launcher
+  documents for `--host ::`, biting from the other side. Related: when waiting
+  on readiness use `curl -sf`, not `curl -s` — without `-f` a 503 "still
+  loading" counts as success and the test fires mid-load.
 
 LAN reachability has a second step the Linux `ufw` setup did not: the rule must be
 scoped to `192.168.178.0/24` **and** the Ethernet profile must be Private, or
