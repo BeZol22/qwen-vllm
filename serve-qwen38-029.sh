@@ -72,6 +72,17 @@ CHAT_TEMPLATE="$(ls "$HOME"/.cache/huggingface/hub/models--unsloth--Qwen3.8-27B-
 CT_ARG=(); [ -n "$CHAT_TEMPLATE" ] && CT_ARG=(--chat-template "$CHAT_TEMPLATE")
 
 # NOTE vs. the 3.6 scripts:
+#   * --host :: (was 0.0.0.0). 0.0.0.0 is IPv4-ONLY, but avahi advertises this box
+#     over mDNS with its IPv6 addresses too, so "omarchy.local" resolves to an IPv6
+#     address first and the connection is REFUSED; clients only reach the server
+#     because Happy Eyeballs falls back to IPv4 after the v6 attempt fails, which
+#     costs a delay on every connection and fails outright in clients that do not
+#     fall back. net.ipv6.bindv6only=0 here, so :: accepts BOTH families on one
+#     socket -- verify with `ss -tln | grep 8000` showing [::]:8000.
+#     SECURITY: this box has a globally routable IPv6 and IPv6 has no NAT, so the
+#     ufw rules are what keep it private. Scope them to the LAN (IPv4 subnet + the
+#     fd34::/64 ULA), never 0.0.0.0/0 or ::/0. ufw defaults to deny-incoming on
+#     both families, so binding :: exposes nothing on its own.
 #   * NO --quantization flag: this checkpoint is compressed-tensors "mixed-precision"
 #     (nvfp4-pack-quantized MLPs + float-quantized attn), auto-detected. Forcing
 #     modelopt here would fail.
@@ -101,11 +112,20 @@ CT_ARG=(); [ -n "$CHAT_TEMPLATE" ] && CT_ARG=(--chat-template "$CHAT_TEMPLATE")
 #     v0.21.0 (vLLM logs 0.97 as "equivalent to 0.9672" without that profiling),
 #     so 0.97 is not as tight as it looks. Above ~0.97 you are eating the slack
 #     that absorbs profiling variance.
-#   * --max-num-seqs 1: single-user agentic coding from one client, which is a
-#     strictly sequential loop, so concurrency never exceeds 1. Each extra slot
-#     would reserve ~152 MiB of per-sequence linear-attention recurrent state
-#     (48 layers x 48 v-heads x 128 x 128 fp32 + conv state) that is allocated
-#     whether used or not. Raise to 2+ only if you run parallel agents.
+#   * --max-num-seqs 2: RAISED from 1 on 2026-09-19 when the server was opened to
+#     the home LAN, so more than one machine can have a request in flight. Each
+#     slot reserves ~152 MiB of per-sequence linear-attention recurrent state
+#     (48 layers x 48 v-heads x 128 x 128 fp32 + conv state), allocated whether
+#     used or not, and that comes out of the KV pool -- it fit inside the 6,991
+#     tokens of slack between the pool (173,391) and --max-model-len (166,400).
+#     THIS DOES NOT BUY TWO LARGE CONTEXTS AT ONCE. max-num-seqs caps how many
+#     sequences may be SCHEDULED; the KV pool stays one shared budget, and vLLM
+#     logs the real limit itself: "Maximum concurrency for 166,400 tokens per
+#     request: 1.04x". Two ~150K requests need ~300K tokens of KV against a
+#     173,391-token pool, so they serialise regardless. The win is real for the
+#     ordinary agentic mix (short turns), not for two jumbo prompts.
+#     Going to 4 needs --max-model-len lowered by ~12,800 tokens; do not raise
+#     this without re-running the gates.
 #   * --max-num-batched-tokens 2048 (was 8192): this is the chunked-prefill chunk
 #     size, and it sets the profiled activation peak, which comes straight out of
 #     the KV pool. MEASURED at util 0.97, fp8:
@@ -163,7 +183,7 @@ CT_ARG=(); [ -n "$CHAT_TEMPLATE" ] && CT_ARG=(--chat-template "$CHAT_TEMPLATE")
 #     NOTE these are DEFAULTS ONLY: a client that sends its own temperature/top_p
 #     in the request overrides them.
 exec vllm serve "$MODEL" \
-  --host 0.0.0.0 --port 8000 \
+  --host :: --port 8000 \
   --tensor-parallel-size 1 \
   --safetensors-load-strategy prefetch \
   --performance-mode interactivity \
@@ -171,7 +191,7 @@ exec vllm serve "$MODEL" \
   --kv-cache-dtype fp8_e4m3 \
   --gpu-memory-utilization 0.95 \
   --max-model-len 166400 \
-  --max-num-seqs 1 \
+  --max-num-seqs 2 \
   --max-num-batched-tokens 2048 \
   --limit-mm-per-prompt '{"image":8,"video":0}' \
   --mm-processor-kwargs '{"max_pixels": 1003520}' \

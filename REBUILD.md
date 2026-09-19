@@ -112,6 +112,84 @@ cd /path/to/project && opencode        # Tab -> orchestrator
 See `opencode-agents/README.md`. A working sample lives in
 `opencode-agents/example-project/`.
 
+## 7. Serving the whole home LAN
+
+The launcher always passed `--host 0.0.0.0`, so the listener needs no change. What
+actually has to happen (done 2026-09-19):
+
+```bash
+# 1. open the port to the LAN ONLY -- never 0.0.0.0/0 or ::/0
+sudo ufw allow from 192.168.178.0/24 to any port 8000 proto tcp comment 'qwen38 vLLM LAN'
+sudo ufw allow from fd34:2703:ce98::/64 to any port 8000 proto tcp comment 'qwen38 vLLM LAN v6'
+# 2. let the --user unit live without a logged-in session, and start at boot
+sudo loginctl enable-linger bezol
+systemctl --user enable qwen38          # needs the [Install] section in the unit
+```
+
+Clients point at either address (avahi is running, so mDNS resolves the name):
+
+```
+http://omarchy.local:8000/v1      # preferred - survives a DHCP change
+http://192.168.178.75:8000/v1     # this box, 2026-09-19
+```
+
+### `--host 0.0.0.0` is IPv4-only, and that half-breaks the hostname
+
+`0.0.0.0` does NOT accept IPv6. avahi advertises this box's IPv6 addresses over
+mDNS, so `omarchy.local` resolves to an IPv6 address FIRST and the connection is
+refused; clients reach the server only because Happy Eyeballs falls back to IPv4.
+That costs a delay on every connection and fails outright in clients that do not
+fall back. Changed to **`--host ::`** -- `net.ipv6.bindv6only=0` here, so one
+socket serves both families. Verify:
+
+```
+ss -tln | grep 8000            # must show  *:8000  (not 0.0.0.0:8000)
+curl -m8 -o/dev/null -w'%{http_code} %{time_total}s\n' http://omarchy.local:8000/v1/models
+```
+
+Measured before/after: IPv6 `000` -> `200`, by-name now 0.10 s natively.
+
+**SECURITY:** this box has a globally routable IPv6 address and IPv6 has NO NAT,
+so ufw is the only thing making it private. Scope the v6 rule to the **ULA**
+prefix (`fd34::/64`), which is unroutable from the internet -- not to the global
+`2a00:` prefix, and never `::/0`. ufw defaults to deny-incoming on both families,
+so binding `::` exposes nothing by itself.
+
+Any OpenAI-compatible client works; model name is `unsloth/Qwen3.8-27B-NVFP4`.
+**There is no authentication** -- fine on a trusted LAN, and the ufw rule is what
+keeps it there. If that ever stops being true, add `--api-key <secret>` to the
+serve script and set `OPENAI_API_KEY` on the clients.
+
+### What multi-client actually buys you
+
+`--max-num-seqs` was raised 1 -> 2. Cost: 2,797 tokens of context
+(pool 6.46 -> 6.34 GiB, 173,391 -> 170,594), still clear of `--max-model-len 166400`.
+
+**It does NOT give two large contexts at once, and that is not a tuning mistake --
+it is arithmetic.** `max-num-seqs` caps how many sequences may be SCHEDULED; the KV
+pool remains one shared budget. vLLM states the real limit at startup:
+
+```
+GPU KV cache size: 170,594 tokens, Maximum concurrency for 166,400 tokens per request: 1.03x
+```
+
+MEASURED 2026-09-19, two clients firing ~149K-token prompts simultaneously:
+
+```
+clientA:  46.4s  148,949 tokens  correct
+clientB:  92.3s  148,921 tokens  correct
+wall:     92.3s   preemption/recompute log lines: 0
+```
+
+So they **serialise cleanly**: both answers correct, wall clock is just 2x one
+request, and the scheduler never preempted -- no recompute was wasted. That is the
+good outcome; the risk with V1 preemption is that a preempted 150K prefill must be
+redone from scratch. The win from seqs=2 is for the ordinary agentic mix of short
+turns, not for two jumbo prompts.
+
+Raising to 4 would cost ~456 MiB and require `--max-model-len` to drop by roughly
+12,800 tokens. Re-run the gates if you do it.
+
 ## Arch / Omarchy deltas
 
 Validated on **Omarchy** (kernel 7.2.5-3, gcc 16.2.1, glibc 2.44, driver 610.57.04,
