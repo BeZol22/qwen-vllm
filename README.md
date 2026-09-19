@@ -15,6 +15,14 @@ decoding, vision, tool calling - plus an **OpenCode multi-agent coding pipeline*
 - `serve-openwebui.sh` - chat UI on :3000 for phones/tablets (client of qwen38, no GPU).
 - `serve-*.sh` - launchers. `serve-qwen38-029.sh` = production; `serve-qwen38.sh` = previous
   vLLM 0.22 setup (190,400 ctx, but broken parallel tool calls); others are older models.
+- `serve-qwen38-windows.ps1` - the **Windows** path: native `llama-server` on unsloth GGUFs
+  (UD-Q5_K_M + mmproj) with a ggml-org DFlash drafter, instead of vLLM, because vLLM needs
+  WSL2 and this box has no system RAM to spare. Serves OpenCode over the LAN at ~1-2 GB host
+  RAM. `$env:QWEN_SPEC` picks the drafter: `dflash` (default) / `mtp` / `none`. See
+  [`docs/notes/windows-native-llamacpp.md`](docs/notes/windows-native-llamacpp.md).
+- `bench-drafters.py` - DFlash vs MTP vs none on this box: decode tok/s and acceptance at
+  512/4K/32K depth, plus **greedy losslessness** against the no-drafter baseline. Manages its
+  own server on :8001, so it does not disturb production.
 - `start-model.sh` / `stop-model.sh` - desktop-button wrappers around the systemd units.
 - `test-verbatim.py`, `test-longctx.py`, `test-vision.py` - correctness gates. Run them after
   ANY change to vLLM version, KV dtype, driver or flags; a clean startup proves nothing.
