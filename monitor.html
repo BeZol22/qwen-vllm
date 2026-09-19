@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>llama-server monitor</title>
+<!--
+  Live view of the local llama-server. Open this file directly in a browser
+  (file:// is fine) -- llama-server reflects any Origin, including "null", so a
+  local file can poll /slots and /metrics without a proxy or a web server.
+
+  WHY A LOCAL FILE AND NOT A HOSTED PAGE: anything hosted off this machine
+  cannot reach 192.168.178.75:8000 from inside a browser sandbox. This has to
+  live next to the server.
+
+  The number that matters most here is CONTEXT. Claude Code does not know this
+  server's --ctx-size (the Anthropic API has no field for it), and was measured
+  driving a prompt to 129,041 of 131,072 tokens with no compaction. Context
+  shift is disabled by default in b11053, so overflow is a hard rejection
+  mid-task, not a graceful truncation. Hence the big gauge at the top.
+-->
+<style>
+  :root{
+    color-scheme: dark;
+    --bg:#0f1115; --panel:#171a21; --line:#242832; --txt:#e6e8ee; --dim:#8b93a7;
+    --ok:#3ddc97; --warn:#ffb454; --bad:#ff5d5d; --accent:#6ea8fe;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+       font:14px/1.45 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+       padding:20px 16px 40px}
+  .wrap{max-width:1000px;margin:0 auto}
+  header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:18px}
+  h1{font-size:16px;margin:0;font-weight:600;letter-spacing:.01em}
+  .spacer{flex:1}
+  input{background:var(--panel);border:1px solid var(--line);color:var(--txt);
+        border-radius:7px;padding:6px 10px;font:12px ui-monospace,monospace;min-width:230px}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--dim);display:inline-block}
+  .dot.live{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+  .dot.err{background:var(--bad)}
+  .status{font-size:12px;color:var(--dim)}
+
+  .gauge{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:14px}
+  .gauge .top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
+  .gauge .label{font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:.07em}
+  .gauge .val{font:600 26px/1 ui-monospace,monospace;font-variant-numeric:tabular-nums}
+  .bar{height:14px;background:#0b0d11;border-radius:7px;overflow:hidden;margin-top:12px;position:relative}
+  .bar i{display:block;height:100%;width:0;background:var(--ok);transition:width .3s ease,background .3s}
+  .bar .tick{position:absolute;top:0;bottom:0;width:2px;background:#4a5064}
+  .sub{margin-top:8px;font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:13px 15px}
+  .card .k{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.07em}
+  .card .v{font:600 21px/1.2 ui-monospace,monospace;margin-top:6px;font-variant-numeric:tabular-nums}
+  .card .n{font-size:11px;color:var(--dim);margin-top:3px}
+  .accent{color:var(--accent)} .good{color:var(--ok)} .warn{color:var(--warn)} .bad{color:var(--bad)}
+  svg{display:block;width:100%;height:56px;margin-top:10px}
+  footer{margin-top:18px;font-size:11px;color:var(--dim)}
+  [hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>llama-server</h1>
+    <input id="base" spellcheck="false">
+    <span class="spacer"></span>
+    <span class="dot" id="dot"></span><span class="status" id="status">connecting…</span>
+  </header>
+
+  <div class="gauge">
+    <div class="top">
+      <span class="label">Context in use</span>
+      <span class="val" id="ctxPct">—</span>
+    </div>
+    <div class="bar"><i id="ctxBar"></i><span class="tick" id="tick" hidden></span></div>
+    <div class="sub" id="ctxSub">waiting for a request…</div>
+  </div>
+
+  <div class="grid">
+    <div class="card"><div class="k">Decode</div><div class="v" id="tps">—</div><div class="n">tokens/sec, live</div></div>
+    <div class="card"><div class="k">Generated</div><div class="v" id="dec">—</div><div class="n" id="remain">this request</div></div>
+    <div class="card"><div class="k">Prompt cache</div><div class="v" id="cache">—</div><div class="n" id="cacheN">reused this request</div></div>
+    <div class="card"><div class="k">Draft accepted</div><div class="v" id="acc">—</div><div class="n">cumulative, speculative decoding</div></div>
+    <div class="card"><div class="k">Prefill</div><div class="v" id="pre">—</div><div class="n">tokens/sec, cumulative</div></div>
+    <div class="card"><div class="k">Requests</div><div class="v" id="reqs">—</div><div class="n" id="reqsN">processing / queued</div></div>
+  </div>
+
+  <svg id="spark" viewBox="0 0 600 56" preserveAspectRatio="none" aria-label="decode rate history">
+    <polyline id="sparkLine" fill="none" stroke="#6ea8fe" stroke-width="2" points=""></polyline>
+  </svg>
+
+  <footer id="foot">polling /slots and /metrics once a second</footer>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const fmt = n => n == null || isNaN(n) ? '—' : Math.round(n).toLocaleString();
+
+// Remembered per browser; harmless if storage is blocked, so it is wrapped.
+let base = 'http://127.0.0.1:8000';
+try { base = localStorage.getItem('llamaMonitorBase') || base; } catch (e) {}
+$('base').value = base;
+$('base').addEventListener('change', e => {
+  base = e.target.value.replace(/\/+$/, '');
+  try { localStorage.setItem('llamaMonitorBase', base); } catch (err) {}
+});
+
+let prev = null, hist = [], fails = 0;
+
+function setDot(cls, text) { $('dot').className = 'dot ' + cls; $('status').textContent = text; }
+
+async function j(path) {
+  const r = await fetch(base + path, { cache: 'no-store' });
+  if (!r.ok) throw new Error(path + ' ' + r.status);
+  return r.json();
+}
+
+function parseMetrics(txt) {
+  const out = {};
+  for (const line of txt.split('\n')) {
+    if (!line || line[0] === '#') continue;
+    const sp = line.lastIndexOf(' ');
+    if (sp < 0) continue;
+    const k = line.slice(0, sp).trim(), v = parseFloat(line.slice(sp + 1));
+    if (!k.includes('{')) out[k.replace('llamacpp:', '')] = v;
+  }
+  return out;
+}
+
+function draw(pts) {
+  if (!pts.length) return;
+  const max = Math.max(60, ...pts);
+  const step = 600 / Math.max(1, pts.length - 1);
+  $('sparkLine').setAttribute('points',
+    pts.map((v, i) => (i * step).toFixed(1) + ',' + (54 - (v / max) * 50).toFixed(1)).join(' '));
+}
+
+async function tick() {
+  let slots, m;
+  try {
+    [slots, m] = await Promise.all([j('/slots'), fetch(base + '/metrics', {cache:'no-store'}).then(r => r.text()).then(parseMetrics)]);
+    fails = 0;
+  } catch (e) {
+    if (++fails > 2) { setDot('err', 'unreachable — is the server running?'); }
+    return;
+  }
+
+  const s = (Array.isArray(slots) ? slots[0] : slots) || {};
+  const nt = (s.next_token && s.next_token[0]) || {};
+  const nCtx = s.n_ctx || 0;
+  const prompt = s.n_prompt_tokens || 0;
+  const decoded = nt.n_decoded || 0;
+  const used = prompt + decoded;
+  const pct = nCtx ? (100 * used / nCtx) : 0;
+
+  setDot('live', s.is_processing ? 'generating' : 'idle');
+
+  $('ctxPct').textContent = nCtx ? pct.toFixed(1) + '%' : '—';
+  const bar = $('ctxBar');
+  bar.style.width = Math.min(100, pct) + '%';
+  bar.style.background = pct > 90 ? 'var(--bad)' : pct > 75 ? 'var(--warn)' : 'var(--ok)';
+  $('ctxPct').className = 'val ' + (pct > 90 ? 'bad' : pct > 75 ? 'warn' : 'good');
+  $('ctxSub').textContent = nCtx
+    ? fmt(used) + ' of ' + fmt(nCtx) + ' tokens  ·  ' + fmt(prompt) + ' prompt + ' + fmt(decoded) + ' generated  ·  ' + fmt(nCtx - used) + ' left'
+    : 'waiting for a request…';
+
+  // live decode rate from the n_decoded delta; /metrics only updates at
+  // request completion, so it cannot show an in-flight rate.
+  const now = performance.now();
+  let tps = null;
+  if (prev && prev.task === s.id_task && decoded > prev.decoded) {
+    tps = (decoded - prev.decoded) / ((now - prev.t) / 1000);
+    hist.push(tps); if (hist.length > 120) hist.shift();
+    draw(hist);
+  }
+  prev = { t: now, decoded, task: s.id_task };
+  if (tps != null) $('tps').textContent = tps.toFixed(1);
+  else if (!s.is_processing) $('tps').textContent = '0';
+
+  $('dec').textContent = fmt(decoded);
+  $('remain').textContent = nt.n_remain != null ? fmt(nt.n_remain) + ' tokens of budget left' : 'this request';
+
+  const cached = s.n_prompt_tokens_cache || 0;
+  $('cache').textContent = prompt ? Math.round(100 * cached / prompt) + '%' : '—';
+  $('cacheN').textContent = fmt(cached) + ' of ' + fmt(prompt) + ' reused';
+
+  const dn = m.spec_decode_num_draft_tokens_total, da = m.spec_decode_num_accepted_tokens_total;
+  $('acc').textContent = dn ? (100 * da / dn).toFixed(1) + '%' : 'off';
+
+  const pt = m.prompt_tokens_total, ps = m.prompt_seconds_total;
+  $('pre').textContent = ps ? fmt(pt / ps) : '—';
+
+  $('reqs').textContent = (m.requests_processing ?? 0) + ' / ' + (m.requests_deferred ?? 0);
+  $('foot').textContent = 'n_ctx ' + fmt(nCtx) + '  ·  largest prompt seen ' + fmt(m.n_tokens_max) +
+                          '  ·  ' + fmt(m.tokens_predicted_total) + ' tokens generated since start';
+}
+
+tick();
+setInterval(tick, 1000);
+</script>
+</body>
+</html>

@@ -348,6 +348,66 @@ break IPv4 clients outright, and the LAN firewall rule is scoped to an IPv4
 subnet so it would not cover an IPv6 listener anyway. Stay on IPv4; use the
 address, and pin it at the router. On the Windows box itself, `127.0.0.1`.
 
+## Claude Code against this server
+
+It works, and needs **no proxy** — llama-server b11053 implements the Anthropic
+Messages API natively. Streaming, `system` blocks with `cache_control`,
+`metadata`, `count_tokens` and the auth headers all answer 200. Most guides tell
+you to put LiteLLM in front; that is for Ollama and older builds.
+
+Use [`system/claude-code/qwen-local.settings.json`](../../system/claude-code/qwen-local.settings.json),
+which carries the whole local setup in one file:
+
+```bash
+claude --settings ~/qwen-vllm/system/claude-code/qwen-local.settings.json
+```
+
+`--settings` applies above user and project settings **for that session only**,
+so paid sessions are untouched. That matters: exporting `ANTHROPIC_BASE_URL`
+globally redirects *every* Claude Code session and breaks the real API — which
+is exactly what happened here on 2026-09-19.
+
+Three things in that file, each for a measured reason:
+
+* **`ANTHROPIC_BASE_URL` is the server ROOT, no `/v1`.** Claude Code appends
+  `/v1/messages` itself; with the suffix it requests `/v1/v1/messages` and 404s.
+  The OpenCode config *does* end in `/v1`, so copying it across is the natural
+  mistake.
+* **`CLAUDE_CODE_MAX_CONTEXT_TOKENS` 131072 and
+  `CLAUDE_CODE_AUTO_COMPACT_WINDOW` 100000.** Claude Code cannot discover the
+  window — the Anthropic API has no field for it, and it never calls
+  `count_tokens` (verified: zero calls in the log). For an unrecognised model id
+  it assumes one, and `[claude-code:unrecognized_model]` confirms `qwen3.8-27b`
+  is unrecognised. Left alone it drove a prompt to **131,071 of 131,072 tokens**.
+  Context shift is disabled by default in b11053, so overflow is a hard
+  rejection mid-task. Compacting at 100000 leaves room for the compaction and
+  the reply; compacting at the wall is compacting too late.
+* **`permissions.deny: ["Agent", "Workflow"]`.** THE CONTEXT IS ONE SHARED SLOT,
+  NOT ONE PER AGENT. `--parallel 1` means a single 131,072-token slot served
+  serially, so spawned subagents do not get a window each — they queue for the
+  same one (measured: `requests_deferred 6`) and thrash the prefix cache with
+  divergent prefixes. The tool is `Agent`; `Task` is not a valid tool name and
+  the published schema rejects it. Remove the entry if you ever want subagents
+  back, but on this backend they cost more than they buy.
+
+### The prefix-cache cliff at large context
+
+```
+W srv alloc: prompt state size 10427.508 MiB exceeds cache size limit 8192.000 MiB, skipping
+```
+
+llama.cpp caches prompt state for prefix reuse, capped at 8 GiB by default
+(`-cram` / `--cache-ram`). At ~131K context that state is **10.4 GiB**, so it is
+skipped and **prefix caching silently stops working exactly where Claude Code
+operates**. Measured contrast in one session: OpenCode at ~69K prompt got
+81–93% cache hits; Claude Code near the ceiling re-prefilled 6–12K tokens every
+turn and decode fell 122 → 77 tok/s.
+
+Raising `-cram` would fix it and costs **host RAM** — the thing
+`--load-mode none` just reclaimed. Buying prefix caching at 131K would spend
+~11 GB of the RAM Docker wants. Capping Claude Code's context is the better
+trade on this box.
+
 ### Two Windows-specific traps, both cost a debugging round
 
 * **The launcher killed itself under output redirection.** `llama-server` writes
