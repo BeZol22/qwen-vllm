@@ -219,6 +219,21 @@ $ArgList = @(
   '--alias', 'qwen3.8-27b',
   '--host', '0.0.0.0', '--port', '8000',
   '--n-gpu-layers', '99',
+  # --load-mode none IS THE WHOLE ANSWER TO "Windows says 100% RAM used".
+  # llama.cpp defaults to mmap, which leaves the entire 21.58 GB GGUF mapped and
+  # RESIDENT in the process working set. Windows does not count those pages as
+  # Available until it trims them, so the box reads as full -- Linux reports the
+  # same pages under buff/cache and calls them available, which is why Ubuntu
+  # never looked like this. MEASURED 2026-09-19, model fully on GPU either way:
+  #   auto (mmap)  load 16s   WS 19.20 GB (0.69 private + 18.51 mapped)  avail  5.68 GB
+  #   none         load  6s   WS  1.45 GB (1.36 private +  0.09 mapped)  avail 23.46 GB
+  #   dio          load  6s   WS  1.45 GB (1.36 private +  0.09 mapped)  avail 23.47 GB
+  # 17.75 GB back AND a faster load: with -ngl 99 every weight ends up in VRAM,
+  # so the host mapping is pure overhead, and one sequential read beats
+  # demand-paging the file in. 'dio' measured identical; 'none' is simpler.
+  # This matters here specifically because the whole point of this deployment is
+  # to leave 20+ GB of system RAM to Docker and the databases.
+  '--load-mode', 'none',
   '--ctx-size', $CtxSize,
   '--parallel', $Parallel,
   '--flash-attn', 'on',

@@ -38,30 +38,47 @@ available (below). The reason survives anyway:
 `llama-server` runs with no VM at all, and LAN exposure is one firewall rule
 instead of mirrored networking. That is the whole argument.
 
-**Host RAM, MEASURED in service 2026-09-19 — an earlier draft of this note said
-"~1–2 GB" and that was wrong:**
+## "Windows says 100% RAM used" — it was mmap, and `--load-mode none` fixes it
 
-| metric | value |
-|---|---|
-| WorkingSetPrivate (the honest figure) | **7.28 GB** |
-| WorkingSet (resident, incl. file-backed) | 24.51 GB |
-| PrivateMemorySize64 (committed VA, incl. reservations) | 35.27 GB |
-| model files on disk | 21.58 GB |
+Symptom: the box reports ~0.4 GB available with llama-server running, which
+never happened under Ubuntu. Cause: **llama.cpp defaults to mmap, which leaves
+the entire 21.58 GB GGUF mapped and RESIDENT in the process working set.**
 
-Read the right column. **7.28 GB private resident** is the real steady-state
-cost; the 24.51 GB working set is mostly the memory-mapped model file, which is
-file-backed and evictable rather than private commit, and the 35.27 GB
-`PrivateMemorySize64` is committed *address space* including mmap reservations —
-not memory pressure, and the number most likely to cause a false alarm.
+Two reasons Ubuntu never showed it, and both have to be understood or the
+numbers keep misleading:
+1. **Accounting.** Linux reports mapped file pages under `buff/cache` and counts
+   them in `available`, because it can drop them instantly. Windows only counts
+   pages as Available once trimmed out of a working set onto the standby list,
+   and with no pressure it never bothers. Same pages, opposite bookkeeping.
+2. **Different runtime.** vLLM streams safetensors to the GPU and releases the
+   host memory; it never holds a 21.58 GB mapping.
 
-This still beats WSL2 comfortably (vLLM's ~10.4 GiB anonymous load peak, plus
-the VM, plus the FlashInfer JIT), but the margin is smaller than claimed: 7.28
-alongside 20+ GB of containers is roughly 27 of 31 GiB. Expect the mmapped model
-pages to be evicted under that pressure. With `--n-gpu-layers 99` the weights
-are served from VRAM and the host copy is only needed during load, so eviction
-should cost nothing after startup — *should*, on reasoning, not measured under
-real container pressure. If the box thrashes, that assumption is the first thing
-to test.
+**MEASURED 2026-09-19** — model fully on GPU in every row, VRAM 27,070 MiB
+throughout, so nothing is traded away:
+
+| `--load-mode` | load | working set | private | mapped | **system available** |
+|---|---|---|---|---|---|
+| `auto` (llama.cpp default) | 16 s | 19.20 GB | 0.69 | 18.51 | **5.68 GB** |
+| **`none` (what we set)** | **6 s** | **1.45 GB** | 1.36 | 0.09 | **23.46 GB** |
+| `dio` | 6 s | 1.45 GB | 1.36 | 0.09 | 23.47 GB |
+
+**17.75 GB back, and a faster load.** Faster is not a typo: with `-ngl 99` every
+weight ends up in VRAM, so the host mapping is pure overhead, and one sequential
+read beats demand-paging the file in tensor by tensor. `dio` measured identical;
+`none` is simpler. This is the setting that makes the deployment's whole premise
+— leave 20+ GB of system RAM to Docker and the databases — actually true.
+
+**Two earlier figures in this note were wrong; keeping them straight matters:**
+* "~1–2 GB of host RAM" was asserted, never measured. Wrong.
+* Then "7.28 GB private" was measured, but *after* the 92K-token gate runs.
+  Freshly loaded and idle it is 0.69 GB private. So private memory grows with
+  large-context work; 7 GB is the busy figure, not the baseline.
+* `PrivateMemorySize64` read 35.27 GB and means nothing here — it is committed
+  *address space* including mmap reservations, not pressure. It is the number
+  most likely to cause a false alarm; use WorkingSetPrivate and system Available.
+
+Commit charge was never the constraint either: 47 GB against an 83 GB limit
+(31 GB RAM + 52 GB pagefile), with 0.1 GB of pagefile actually in use.
 
 ## Quant selection: why not NVFP4, and why not Q4_0
 
