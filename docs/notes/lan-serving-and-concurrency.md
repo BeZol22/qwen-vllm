@@ -19,15 +19,19 @@ systemctl --user enable qwen38         # [Install] added to the unit for this
 Clients use `http://omarchy.local:8000/v1` (avahi is active) or
 `http://192.168.178.75:8000/v1`.
 
-**`--host 0.0.0.0` was IPv4-only and half-broke the hostname.** avahi advertises
-the box's IPv6 addresses, so `omarchy.local` resolved to IPv6 FIRST and was
-refused (`000`); it only worked at all because Happy Eyeballs fell back to IPv4.
-Now `--host ::` (`bindv6only=0`, one socket serves both) -> `ss -tln` shows
-`*:8000`, IPv6 returns `200`, by-name connects in 0.10 s. NOTE this box has a
-globally routable IPv6 and IPv6 has no NAT, so the v6 ufw rule is scoped to the
-**ULA** `fd34::/64` (unroutable from outside), never the global `2a00:` prefix. No auth -- the ufw rule scoped to the subnet is
-the only thing keeping it private, so do NOT widen it to `0.0.0.0/0`. If auth is
-ever needed: `--api-key` on the server, `OPENAI_API_KEY` on the clients.
+**`--host` stays `0.0.0.0` -- IPv4-only ON PURPOSE.** Briefly changed to `::`
+for native IPv6 (avahi advertises v6, so `omarchy.local` resolves v6-first), then
+**reverted**: this box has a globally routable IPv6 and IPv6 has no NAT, so `::`
+puts a listener on a public address and privacy depends solely on ufw. `0.0.0.0`
+listens only on an RFC1918 address behind NAT -- unreachable by construction even
+if ufw is flushed. The fallback cost is nil: no v6 listener means an instant RST,
+measured 0.127 s first call (mDNS) then 0.0015 s. Do not "fix" this again.
+
+`ss -tln | grep 8000` must show `0.0.0.0:8000`, never `*:8000`.
+
+Unrelated pre-existing exposure worth knowing: Omarchy's ufw allows **53317
+(LocalSend) from `::/0` and `0.0.0.0/0`** -- internet-reachable over IPv6 whenever
+LocalSend is running.
 
 **`--max-num-seqs` 1 -> 2 costs 2,797 tokens** (pool 6.46 -> 6.34 GiB,
 173,391 -> 170,594), which still clears `--max-model-len 166400`.

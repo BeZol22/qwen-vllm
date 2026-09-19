@@ -133,32 +133,44 @@ http://omarchy.local:8000/v1      # preferred - survives a DHCP change
 http://192.168.178.75:8000/v1     # this box, 2026-09-19
 ```
 
-### `--host 0.0.0.0` is IPv4-only, and that half-breaks the hostname
+### Keep `--host 0.0.0.0`: IPv4-only is the point, not a limitation
 
-`0.0.0.0` does NOT accept IPv6. avahi advertises this box's IPv6 addresses over
-mDNS, so `omarchy.local` resolves to an IPv6 address FIRST and the connection is
-refused; clients reach the server only because Happy Eyeballs falls back to IPv4.
-That costs a delay on every connection and fails outright in clients that do not
-fall back. Changed to **`--host ::`** -- `net.ipv6.bindv6only=0` here, so one
-socket serves both families. Verify:
+`0.0.0.0` does not accept IPv6. That was briefly "fixed" with `--host ::` and then
+**reverted 2026-09-19**, because on this box IPv6 is a liability, not a feature:
 
+* This machine has a **globally routable IPv6** (`2a00:...`) and **IPv6 has no
+  NAT**. Binding `::` puts a listener directly on a public address, so
+  "unreachable from the internet" becomes entirely dependent on ufw staying
+  correct forever. Binding `0.0.0.0` means the only listener is on an RFC1918
+  address behind NAT -- unreachable by construction, even if ufw is flushed.
+* The cost of IPv4-only is **nothing measurable**. avahi advertises IPv6, so
+  `omarchy.local` resolves to IPv6 first, but with no v6 listener the kernel
+  replies RST immediately and the client switches to IPv4 at once. MEASURED:
+
+  ```
+  200 in 0.127s     <- first call, mDNS lookup
+  200 in 0.0015s    <- subsequent
+  ```
+
+  The earlier worry that non-fallback clients would break did not survive
+  measurement; the refusal is instant, not a timeout.
+
+**So: two layers, and the first one is structural.** (1) no listener on any
+public address; (2) ufw `DEFAULT_INPUT_POLICY=DROP` with port 8000 allowed only
+from `192.168.178.0/24` (and `fd34::/64`, now moot). Verify both:
+
+```bash
+ss -tln | grep 8000          # must be 0.0.0.0:8000 -- NOT *:8000 or [::]:8000
+sudo ufw status verbose      # 8000 allowed ONLY from the LAN subnet
 ```
-ss -tln | grep 8000            # must show  *:8000  (not 0.0.0.0:8000)
-curl -m8 -o/dev/null -w'%{http_code} %{time_total}s\n' http://omarchy.local:8000/v1/models
-```
 
-Measured before/after: IPv6 `000` -> `200`, by-name now 0.10 s natively.
+**You cannot test external reachability from this box.** ufw accepts everything on
+`lo`, and traffic to your own address is routed over `lo`, so `curl` to your own
+public IP returns 200 whether or not the internet can reach it. Test from a device
+off the LAN (phone on mobile data), or trust the two structural facts above.
 
-**SECURITY:** this box has a globally routable IPv6 address and IPv6 has NO NAT,
-so ufw is the only thing making it private. Scope the v6 rule to the **ULA**
-prefix (`fd34::/64`), which is unroutable from the internet -- not to the global
-`2a00:` prefix, and never `::/0`. ufw defaults to deny-incoming on both families,
-so binding `::` exposes nothing by itself.
-
-Any OpenAI-compatible client works; model name is `unsloth/Qwen3.8-27B-NVFP4`.
-**There is no authentication** -- fine on a trusted LAN, and the ufw rule is what
-keeps it there. If that ever stops being true, add `--api-key <secret>` to the
-serve script and set `OPENAI_API_KEY` on the clients.
+**Also check the router.** NAT is what protects IPv4, so confirm there is no port
+forward for 8000 -- including one created automatically by **UPnP**.
 
 ### What multi-client actually buys you
 

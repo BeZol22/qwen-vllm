@@ -183,7 +183,7 @@ CT_ARG=(); [ -n "$CHAT_TEMPLATE" ] && CT_ARG=(--chat-template "$CHAT_TEMPLATE")
 #     NOTE these are DEFAULTS ONLY: a client that sends its own temperature/top_p
 #     in the request overrides them.
 exec vllm serve "$MODEL" \
-  --host :: --port 8000 \
+  --host 0.0.0.0 --port 8000 \
   --tensor-parallel-size 1 \
   --safetensors-load-strategy prefetch \
   --performance-mode interactivity \
