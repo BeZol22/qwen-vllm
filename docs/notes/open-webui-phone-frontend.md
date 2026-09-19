@@ -144,3 +144,39 @@ and the script `cd "$HOME"` so a manual run cannot drift.
 **`~/.webui_secret_key` is a backup item**, alongside `DATA_DIR`: lose it and
 everyone is logged out.
 
+## "nem tudok keresgélni" -- web search on by default (2026-09-19)
+
+Enabling `web.search.enable` is only half of it. The model still answered *"sajnos
+közvetlenül az interneten nem tudok keresgélni"* because web search is gated on a
+**per-request** `features.web_search` flag that the frontend only sets when the
+user switches the toggle on for that message. Everything else was already open:
+
+| gate | source | state |
+|---|---|---|
+| `web.search.enable` | DB config | true |
+| `features.web_search` permission | `user.permissions` | true for normal users |
+| `is_builtin_tool_enabled('web_search')` | model row `meta.builtinTools` | **defaults True** with no row |
+| `get_model_capability('web_search')` | model row `meta.capabilities` | **defaults True** with no row |
+| `features.get('web_search')` | the per-message toggle | **was the only blocker** |
+
+Fixed by persisting the setting the toggle writes, `webSearch: "always"`, in
+`ui.default_interface_settings` (so new accounts inherit it) **and** in each
+existing user's `settings.ui`. Both are DB state, so both are lost with `DATA_DIR`.
+
+**"always" does NOT mean a search on every message.** `middleware.py` forces the
+RAG search path only when `params.function_calling == 'legacy'`:
+
+```python
+# Skip forced RAG web search when native FC is enabled - model can use web_search tool
+if metadata.get("params", {}).get("function_calling") == "legacy":
+```
+
+`function_calling` defaults to `null`, which is not `'legacy'`, so the native path
+runs instead: `search_web` and `fetch_url` are handed to the model as **tools** and
+it calls them when it judges they are needed. That is why this is cheap enough to
+leave on -- a "hello" costs nothing. It works here because qwen38 serves with
+`--enable-auto-tool-choice --tool-call-parser qwen3_xml` and parallel tool calls
+are known good on 0.29 ([[production-is-vllm-029-opencode-pipeline]]).
+
+Phones must **reload the page** to pick up changed settings.
+
