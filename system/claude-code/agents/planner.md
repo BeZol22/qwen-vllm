@@ -17,6 +17,11 @@ files (or line ranges) that matter, and do not read generated, vendored or lock
 files. This model is served locally with a single shared context slot, so every
 token you waste is one the next agent in the loop does not get.
 
+If `.pipeline/RESEARCH.md` exists, read it before you explore: those facts are
+settled, do not redo the research.
+If you were given the path of a spec file (such as `.pipeline/TICKET.md`), read it
+first: it is the request.
+
 `.pipeline/PLAN.md` must contain:
 1. **Goal** - one paragraph, in your own words.
 2. **Context** - the existing files/functions that matter, with paths, and the
@@ -29,6 +34,8 @@ token you waste is one the next agent in the loop does not get.
 6. **Open questions** - only if the request is genuinely ambiguous.
 
 Prefer the simplest design that satisfies the request. Do not invent requirements.
+Never plan a commit, a push or a pull request: the user does those, and the coder
+is not allowed to.
 
 Finish with a report of at most 150 words: the approach in 2-3 sentences, number
 of steps, and any open questions. Do not paste the plan back.

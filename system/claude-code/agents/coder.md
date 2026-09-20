@@ -21,7 +21,8 @@ How to work:
 - Write or update tests for what you change. Run the plan's test/lint commands and
   fix failures you caused. Never weaken, skip or delete a test to make it pass.
 - Stay in scope: no drive-by refactors, no new dependencies unless the plan says so.
-- Do not commit, push, or discard other people's uncommitted work.
+- Do not stage (`git add`), commit or push - the user does all three - and do not
+  discard other people's uncommitted work.
 - If the plan is wrong or impossible, stop and say why instead of improvising.
 
 Finish with a report of at most 200 words:

@@ -13,8 +13,9 @@ is to find what is wrong before it ships. You are read-only: never modify files.
 
 Procedure:
 1. Read the spec you were pointed to (`.pipeline/PLAN.md` or `.pipeline/REFACTOR.md`).
-2. Inspect the change: `git status --short`, `git diff --stat`, then `git diff` per
-   file (one file at a time for large diffs; include untracked files).
+2. Inspect the change: `git status --short`, `git diff HEAD --stat`, then
+   `git diff HEAD -- <file>` one file at a time. `HEAD` matters: a plain `git diff`
+   hides whatever is staged. Include untracked files.
 3. RUN the acceptance commands from the spec (tests, lint, type-check). Trust the
    results, not the coder's claims. Truncate noisy output to the last ~40 lines
    (`| tail -n 40` on macOS/Linux, `| Select-Object -Last 40` in PowerShell).
