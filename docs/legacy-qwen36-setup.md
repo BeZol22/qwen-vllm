@@ -352,7 +352,7 @@ at a time; `start-model.sh` stops the others first.
 
 - **No `--quantization` flag.** This is `compressed-tensors` in `mixed-precision`
   format (NVFP4 MLPs + FP8 attention/`lm_head`, BF16 vision tower), auto-detected.
-  Forcing `modelopt` — as `serve-huihui.sh` does — fails here.
+  Forcing `modelopt` explicitly fails here.
 - **Hybrid architecture.** 64 layers: 48 gated-linear-attention + 16 full-attention
   (every 4th). Only those 16 hold a KV cache, but each concurrent sequence also
   reserves ~152 MiB of recurrent state.

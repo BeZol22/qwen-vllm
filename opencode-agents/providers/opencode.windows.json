@@ -9,7 +9,7 @@
       "npm": "@ai-sdk/openai-compatible",
       "name": "Local llama.cpp (RTX 5090, Windows)",
       "options": {
-        "baseURL": "http://192.168.178.75:8000/v1",
+        "baseURL": "http://REPLACE-WITH-LAN-IP:8000/v1",
         "apiKey": "not-needed"
       },
       "models": {

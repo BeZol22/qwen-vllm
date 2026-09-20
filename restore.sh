@@ -7,7 +7,12 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 mkdir -p ~/.config/systemd/user ~/Desktop
 cp -v "$HERE"/system/systemd/*.service ~/.config/systemd/user/
 cp -v "$HERE"/system/systemd/qwen38.service.bak-022 ~/.config/systemd/user/
-cp -v "$HERE"/system/desktop/*.desktop ~/Desktop/ && chmod +x ~/Desktop/*.desktop
+# Desktop entries cannot expand variables, so the repo path is substituted here.
+for d in "$HERE"/system/desktop/*.desktop; do
+  sed "s|@REPO@|$HERE|g" "$d" > ~/Desktop/"$(basename "$d")"
+  echo "wrote ~/Desktop/$(basename "$d")"
+done
+chmod +x ~/Desktop/*.desktop
 systemctl --user daemon-reload
 
 # --- OpenCode: provider wiring + the agent team -----------------------------

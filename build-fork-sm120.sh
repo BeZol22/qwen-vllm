@@ -15,7 +15,7 @@
 # modified -- nothing is pip-installed here.
 #
 # Build in place, then run with:
-#   PYTHONPATH=/home/bezol/vllm-pr-src <nightly-python> -m vllm.entrypoints.cli.main serve ...
+#   PYTHONPATH=~/vllm-pr-src <nightly-python> -m vllm.entrypoints.cli.main serve ...
 set -euo pipefail
 
 VENV="$HOME/vllm-nightly-env"

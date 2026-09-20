@@ -44,14 +44,14 @@
 #        # a) the rule, scoped to the LAN -- NEVER use -RemoteAddress Any
 #        New-NetFirewallRule -DisplayName "llama-server LAN" -Direction Inbound `
 #          -Action Allow -Protocol TCP -LocalPort 8000 `
-#          -RemoteAddress 192.168.178.0/24 -Profile Private
+#          -RemoteAddress <LAN>/24 -Profile Private
 #
 #        # b) the Ethernet network must BE Private. On a Public profile Windows
 #        #    drops inbound regardless of the rule above.
 #        Get-NetConnectionProfile -InterfaceAlias Ethernet        # want: Private
 #        Set-NetConnectionProfile -InterfaceAlias Ethernet -NetworkCategory Private
 #
-#      This box is 192.168.178.75/24 on "Ethernet". Adjust if the subnet moves.
+#      This box is <LAN-IP>/24 on "Ethernet". Adjust if the subnet moves.
 #
 #      NORDVPN: NordLynx (10.5.0.2/16) is installed. With the tunnel up, inbound LAN
 #      connections to this box can be blackholed or the profile re-evaluated even
@@ -275,7 +275,7 @@ Write-Host "model        : $Model"
 Write-Host "context      : $CtxSize (q8_0 KV, $Parallel slot(s) -> $PerSlot per slot)"
 Write-Host "drafter      : $SpecState"
 Write-Host "vision       : $VisionState"
-Write-Host "LAN endpoint : http://192.168.178.75:8000/v1   <- point OpenCode here"
+Write-Host "LAN endpoint : http://<LAN-IP>:8000/v1   <- point OpenCode here"
 Write-Host ''
 
 # MANDATORY, and it cost a debugging round: llama-server writes its NORMAL logs

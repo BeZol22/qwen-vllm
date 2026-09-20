@@ -1,9 +1,0 @@
-[Desktop Entry]
-Type=Application
-Version=1.0
-Name=Start Qwen 27B (abliterated)
-Comment=Start the 27B abliterated NVFP4 model (stops the 35B first)
-Exec=/home/bezol/qwen-vllm/start-model.sh qwen-huihui
-Icon=media-playback-start
-Terminal=true
-Categories=Utility;

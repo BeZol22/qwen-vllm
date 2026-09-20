@@ -2,8 +2,8 @@
 Type=Application
 Version=1.0
 Name=Start Qwen 35B
-Comment=Start the 35B-A3B MoE model (stops the 27B first)
-Exec=/home/bezol/qwen-vllm/start-model.sh qwen-vllm
+Comment=Start the 35B-A3B MoE model (stops any other Qwen first)
+Exec=@REPO@/start-model.sh qwen-vllm
 Icon=media-playback-start
 Terminal=true
 Categories=Utility;

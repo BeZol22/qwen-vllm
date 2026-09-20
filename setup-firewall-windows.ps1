@@ -113,8 +113,8 @@ Step "network profile Private (was $profileNow)" ($profileNow -eq 'Private') {
 }
 
 # --- 2. the scoped inbound rule ----------------------------------------------
-# Windows stores a CIDR back as a dotted netmask: you write 192.168.178.0/24 and
-# Get-NetFirewallAddressFilter hands you 192.168.178.0/255.255.255.0. Comparing
+# Windows stores a CIDR back as a dotted netmask: you write <LAN>/24 and
+# Get-NetFirewallAddressFilter hands you <LAN>/255.255.255.0. Comparing
 # the two as strings never matches, so the rule looks wrong on every run and the
 # script deletes and recreates a perfectly good rule forever. Normalise first --
 # this is what makes "0 changed" actually mean nothing needed doing.

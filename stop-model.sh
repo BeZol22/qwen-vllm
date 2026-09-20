@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Stops ALL Qwen vLLM models (whichever is running) and frees GPU VRAM. Double-click target.
-ALL="qwen-vllm qwen-huihui qwen38"
+ALL="qwen-vllm qwen38"
 notify() { command -v notify-send >/dev/null && notify-send -i media-playback-stop "Qwen vLLM" "$1" || true; }
 echo "==================================================="
 echo "  Stopping all Qwen vLLM models"

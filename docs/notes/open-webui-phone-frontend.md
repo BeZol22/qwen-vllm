@@ -9,7 +9,7 @@ metadata:
 
 **Installed 2026-09-19** (Open WebUI 0.11.3, `~/open-webui-env`, ~7.6 GB) because
 vLLM's raw OpenAI API is unusable on a phone. Any LAN device opens
-`http://omarchy.local:3000` in Safari -- iOS resolves `.local` via Bonjour with no
+`http://<hostname>.local:3000` in Safari -- iOS resolves `.local` via Bonjour with no
 setup -- and *Share -> Add to Home Screen* makes it behave like an app. No App
 Store app and no per-phone endpoint configuration.
 
@@ -67,7 +67,7 @@ right shape for a family LAN, but it does mean a new phone sees a "waiting for
 approval" screen rather than a chat.
 
 ufw needs its own rule for the new port:
-`sudo ufw allow from 192.168.178.0/24 to any port 3000 proto tcp`.
+`sudo ufw allow from <LAN>/24 to any port 3000 proto tcp`.
 
 **Privacy:** inference is 100% local, but Open WebUI makes OUTBOUND calls to
 huggingface.co on first run for its RAG embedding model (`all-MiniLM-L6-v2`).

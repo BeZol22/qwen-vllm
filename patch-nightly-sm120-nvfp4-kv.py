@@ -34,8 +34,8 @@ import shutil
 import sys
 from pathlib import Path
 
-TARGET = Path(
-    "/home/bezol/vllm-nightly-env/lib/python3.12/site-packages/vllm/"
+TARGET = Path.home() / (
+    "vllm-nightly-env/lib/python3.12/site-packages/vllm/"
     "v1/attention/backends/flashinfer.py"
 )
 

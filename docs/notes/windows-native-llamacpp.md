@@ -338,12 +338,15 @@ that is a workspace trust prompt, not a config error, and the existing
 
 **The baseURL is the fragile part, and it is fragile in two different ways.**
 
-`192.168.178.75` is a **DHCP** address, not static — `PrefixOrigin=Dhcp`. The
-fix is a DHCP reservation on the router (the 192.168.178.x range is a Fritz!Box
-default), not a hand-edited config that breaks on the next lease.
+It ships as `REPLACE-WITH-LAN-IP`; fill in this box's LAN address (`ipconfig`)
+before the config will work at all. Then:
 
-And **do not reach for `9800X3D.local` instead.** It resolves, but mDNS here
-hands back IPv6 first (`2a00:1e:b700:...`, plus link-locals) and `llama-server`
+The LAN address is a **DHCP** address, not static — `PrefixOrigin=Dhcp`. The
+fix is a DHCP reservation on the router, not a hand-edited config that breaks on
+the next lease.
+
+And **do not reach for `<hostname>.local` instead.** It resolves, but mDNS here
+hands back IPv6 first (`2a00:...`, plus link-locals) and `llama-server`
 binds `0.0.0.0`, which is IPv4-only — so every connection would try IPv6, get
 refused, and depend on the client's Happy Eyeballs fallback. That is the same
 trap [[production-is-vllm-029-opencode-pipeline]] hit from the other direction,
@@ -479,7 +482,7 @@ trade on this box.
   loading" counts as success and the test fires mid-load.
 
 LAN reachability has a second step the Linux `ufw` setup did not: the rule must be
-scoped to `192.168.178.0/24` **and** the Ethernet profile must be Private, or
+scoped to `<LAN>/24` **and** the Ethernet profile must be Private, or
 Windows drops inbound regardless. NordLynx (10.5.0.2/16) is installed — if the
 MacBook cannot reach port 8000, test with NordVPN disconnected before touching
 the firewall.

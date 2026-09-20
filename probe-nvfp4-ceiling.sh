@@ -10,8 +10,9 @@
 # compile is contained to the scope instead of OOM-killing the machine (which is
 # exactly what happened on 2026-09-18 17:50).
 set -uo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-LOG="${LOG:-/tmp/claude-1000/-home-bezol-qwen-vllm/nvfp4-probe.log}"
+LOG="${LOG:-/tmp/qwen-vllm/nvfp4-probe.log}"
 mkdir -p "$(dirname "$LOG")"
 : > "$LOG"
 
@@ -19,7 +20,7 @@ echo "Probing nvfp4 KV ceiling; log -> $LOG"
 
 # 26G leaves the desktop room and still fits vLLM (~10.4G) + a 4-way JIT (~7G).
 systemd-run --user --scope --quiet -p MemoryMax=26G -p MemorySwapMax=4G -- \
-  env MAXLEN=262144 /home/bezol/qwen-vllm/serve-qwen38-nightly.sh >>"$LOG" 2>&1 &
+  env MAXLEN=262144 "$HERE"/serve-qwen38-nightly.sh >>"$LOG" 2>&1 &
 RUNPID=$!
 
 # Watch for a verdict: either the server binds, or vLLM reports the KV ceiling.

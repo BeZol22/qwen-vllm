@@ -2,10 +2,9 @@
 # Generic launcher (double-click target). Usage: start-model.sh <systemd-unit>
 # Stops any OTHER Qwen model first (only one can bind :8000), then starts this one and waits.
 SVC="$1"
-ALL="qwen-vllm qwen-huihui qwen38"
+ALL="qwen-vllm qwen38"
 case "$SVC" in
   qwen-vllm)   NAME="Qwen 35B-A3B (MoE)";;
-  qwen-huihui) NAME="Qwen 27B abliterated";;
   qwen38)      NAME="Qwen3.8 27B (NVFP4)";;
   *)           NAME="$SVC";;
 esac

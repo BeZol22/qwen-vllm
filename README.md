@@ -23,7 +23,9 @@ decoding, vision, tool calling - plus an **OpenCode multi-agent coding pipeline*
   [`docs/notes/windows-native-llamacpp.md`](docs/notes/windows-native-llamacpp.md).
 - `opencode-agents/providers/opencode.windows.json` - OpenCode client config for the
   Windows box (model id `qwen3.8-27b`, 126000 ctx, attachment/reasoning/tool_call all
-  verified). Install with `./install.sh <project> windows`.
+  verified). Install with `./install.sh <project> windows`. Both this and
+  `system/claude-code/qwen-local.settings.json` ship `REPLACE-WITH-LAN-IP` in their
+  endpoint - put your serving box's LAN address there (`ipconfig` / `ip -4 addr`).
 - `monitor.html` - live dashboard for the running server: context gauge, decode tok/s,
   prompt-cache reuse, draft acceptance, queue depth. Open it straight from disk; it polls
   `/slots` and `/metrics` and needs no web server (llama-server reflects any Origin).

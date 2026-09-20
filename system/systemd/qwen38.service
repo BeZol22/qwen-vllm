@@ -15,7 +15,7 @@ KillMode=mixed
 # Boot autostart ENABLED 2026-09-19, when the server was opened to the home LAN:
 # other machines need it up without someone first logging in here and pressing a
 # button. This also requires user lingering, or the unit dies with the session:
-#   sudo loginctl enable-linger bezol
+#   sudo loginctl enable-linger "$USER"
 #   systemctl --user enable qwen38
 # To go back to the old manual-button behaviour: systemctl --user disable qwen38.
 

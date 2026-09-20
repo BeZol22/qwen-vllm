@@ -42,12 +42,13 @@ Not in git (too big) - re-download or back up to an external disk BEFORE formatt
 |---|---|---|
 | `~/.cache/huggingface/hub/models--unsloth--Qwen3.8-27B-NVFP4` | 22 GB | auto-downloads on first start (needs the `\|\| true` fix, see [notes](docs/notes/cold-cache-breaks-the-launcher.md)) |
 | `models--nvidia--Qwen3.6-35B-A3B-NVFP4` | 22 GB | only for the old `serve-qwen35.sh` |
-| `models--sakamakismile--Huihui-Qwen3.6-27B-abliterated-NVFP4-MTP` | 20 GB | only for `serve-huihui.sh` |
 | `~/vllm-029-env` | 8 GB | step 3 below |
 
-## 0. Clone to the SAME path
+## 0. Clone to `~/qwen-vllm`
 
-Scripts, systemd units and desktop launchers assume `/home/bezol/qwen-vllm`:
+Scripts and systemd units assume `~/qwen-vllm` (the units use systemd's `%h`).
+The desktop launchers carry a `@REPO@` placeholder that `restore.sh` substitutes,
+so they follow the repo wherever it lives:
 
 ```bash
 sudo apt install -y git curl build-essential
@@ -153,18 +154,18 @@ actually has to happen (done 2026-09-19):
 
 ```bash
 # 1. open the port to the LAN ONLY -- never 0.0.0.0/0 or ::/0
-sudo ufw allow from 192.168.178.0/24 to any port 8000 proto tcp comment 'qwen38 vLLM LAN'
-sudo ufw allow from fd34:2703:ce98::/64 to any port 8000 proto tcp comment 'qwen38 vLLM LAN v6'
+sudo ufw allow from <LAN>/24 to any port 8000 proto tcp comment 'qwen38 vLLM LAN'
+sudo ufw allow from <ULA>::/64 to any port 8000 proto tcp comment 'qwen38 vLLM LAN v6'
 # 2. let the --user unit live without a logged-in session, and start at boot
-sudo loginctl enable-linger bezol
+sudo loginctl enable-linger "$USER"
 systemctl --user enable qwen38          # needs the [Install] section in the unit
 ```
 
 Clients point at either address (avahi is running, so mDNS resolves the name):
 
 ```
-http://omarchy.local:8000/v1      # preferred - survives a DHCP change
-http://192.168.178.75:8000/v1     # this box, 2026-09-19
+http://<hostname>.local:8000/v1   # preferred - survives a DHCP change
+http://<LAN-IP>:8000/v1           # the box's own LAN address
 ```
 
 ### Keep `--host 0.0.0.0`: IPv4-only is the point, not a limitation
@@ -178,7 +179,7 @@ http://192.168.178.75:8000/v1     # this box, 2026-09-19
   correct forever. Binding `0.0.0.0` means the only listener is on an RFC1918
   address behind NAT -- unreachable by construction, even if ufw is flushed.
 * The cost of IPv4-only is **nothing measurable**. avahi advertises IPv6, so
-  `omarchy.local` resolves to IPv6 first, but with no v6 listener the kernel
+  `<hostname>.local` resolves to IPv6 first, but with no v6 listener the kernel
   replies RST immediately and the client switches to IPv4 at once. MEASURED:
 
   ```
@@ -191,7 +192,7 @@ http://192.168.178.75:8000/v1     # this box, 2026-09-19
 
 **So: two layers, and the first one is structural.** (1) no listener on any
 public address; (2) ufw `DEFAULT_INPUT_POLICY=DROP` with port 8000 allowed only
-from `192.168.178.0/24` (and `fd34::/64`, now moot). Verify both:
+from `<LAN>/24` (and `<ULA>::/64`, now moot). Verify both:
 
 ```bash
 ss -tln | grep 8000          # must be 0.0.0.0:8000 -- NOT *:8000 or [::]:8000
@@ -246,15 +247,15 @@ opens a URL in Safari. Installed 2026-09-19, Open WebUI 0.11.3.
 ~/.local/bin/python3.12 -m venv ~/open-webui-env
 ~/open-webui-env/bin/pip install open-webui          # ~7.6 GB, bundles its own ML stack
 ~/qwen-vllm/restore.sh                               # installs open-webui.service too
-sudo ufw allow from 192.168.178.0/24 to any port 3000 proto tcp comment 'open-webui LAN'
+sudo ufw allow from <LAN>/24 to any port 3000 proto tcp comment 'open-webui LAN'
 systemctl --user enable --now open-webui
 ```
 
 Then from any iPhone/iPad/Mac on the LAN:
 
 ```
-http://omarchy.local:3000        # iOS resolves .local via Bonjour natively
-http://192.168.178.75:3000
+http://<hostname>.local:3000        # iOS resolves .local via Bonjour natively
+http://<LAN-IP>:3000
 ```
 
 Safari -> Share -> **Add to Home Screen** makes it behave like an app. The FIRST
@@ -333,7 +334,8 @@ JIT host-OOM described in `serve-qwen38-029.sh` has far more margin. `MAX_JOBS=4
 stays anyway -- it costs only cold-start latency
 ([[host-ram-is-the-other-ceiling]]).
 
-**Paths:** the scripts, units and desktop launchers assume `~/qwen-vllm`. If you
+**Paths:** the scripts and units assume `~/qwen-vllm` (the desktop launchers
+follow the repo on their own -- `restore.sh` fills in their `@REPO@`). If you
 clone elsewhere (e.g. `~/Documents/qwen-vllm`), symlink rather than edit paths:
 
 ```bash

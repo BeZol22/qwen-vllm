@@ -73,7 +73,7 @@ CT_ARG=(); [ -n "$CHAT_TEMPLATE" ] && CT_ARG=(--chat-template "$CHAT_TEMPLATE")
 
 # NOTE vs. the 3.6 scripts:
 #   * --host :: (was 0.0.0.0). 0.0.0.0 is IPv4-ONLY, but avahi advertises this box
-#     over mDNS with its IPv6 addresses too, so "omarchy.local" resolves to an IPv6
+#     over mDNS with its IPv6 addresses too, so "<hostname>.local" resolves to an IPv6
 #     address first and the connection is REFUSED; clients only reach the server
 #     because Happy Eyeballs falls back to IPv4 after the v6 attempt fails, which
 #     costs a delay on every connection and fails outright in clients that do not
@@ -81,7 +81,7 @@ CT_ARG=(); [ -n "$CHAT_TEMPLATE" ] && CT_ARG=(--chat-template "$CHAT_TEMPLATE")
 #     socket -- verify with `ss -tln | grep 8000` showing [::]:8000.
 #     SECURITY: this box has a globally routable IPv6 and IPv6 has no NAT, so the
 #     ufw rules are what keep it private. Scope them to the LAN (IPv4 subnet + the
-#     fd34::/64 ULA), never 0.0.0.0/0 or ::/0. ufw defaults to deny-incoming on
+#     <ULA>::/64), never 0.0.0.0/0 or ::/0. ufw defaults to deny-incoming on
 #     both families, so binding :: exposes nothing on its own.
 #   * NO --quantization flag: this checkpoint is compressed-tensors "mixed-precision"
 #     (nvfp4-pack-quantized MLPs + float-quantized attn), auto-detected. Forcing
