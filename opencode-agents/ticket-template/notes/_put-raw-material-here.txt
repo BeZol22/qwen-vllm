@@ -1,0 +1,6 @@
+Put the raw material for this ticket here, as text files: the Jira text, meeting notes,
+mail threads, log excerpts. A date at the start of the file name helps - a later decision
+beats an earlier one:   2026-09-15-refinement.txt
+
+/intake reads everything in this folder except files whose name starts with "_" (like this one)
+and writes TICKET.md from it. The planner opens a note only when TICKET.md points to it.

@@ -1,0 +1,112 @@
+{
+  // OpenCode v2 configuration for THIS ticket folder: one local OpenAI-compatible model,
+  // nothing else. OpenCode reads this file from the folder it is opened in (measured on
+  // v2.0.10, in a folder that is not a git repository), together with .opencode\agents,
+  // .opencode\commands and .opencode\skills beside it. Nothing has to be installed and
+  // nothing has to exist in %USERPROFILE%\.config\opencode.
+  //
+  // FILL IN TWO VALUES ONCE, IN YOUR SAMPLE FOLDER - every copy you make for a ticket then
+  // carries them:  REPLACE-WITH-SERVED-MODEL-NAME (three places)  and  REPLACE-WITH-BASE-URL.
+  //
+  // Every key below is in v2's OWN spelling, read back from `opencode debug config`. v2 still
+  // accepts the v1 spelling (provider/npm/options/autoupdate) and translates it on load, but
+  // it silently drops what it cannot translate; a native file has nothing to drop. If this
+  // file seems to be ignored, look for "configuration normalization diagnostic" in
+  // %USERPROFILE%\.local\share\opencode\log\opencode.log -- malformed JSON is rejected
+  // there, not on screen, and then the WHOLE file is ignored.
+
+  // The model id must equal, character for character, what your server reports at
+  // <baseURL>/models. It appears three times in this file.
+  "model": { "providerID": "work-llm", "model": "REPLACE-WITH-SERVED-MODEL-NAME" },
+
+  // The pipeline's primary agent: .opencode\agents\orchestrator.md. If that file is missing
+  // this dangles and OpenCode falls back to its built-in `build` agent.
+  "default_agent": "orchestrator",
+
+  "update": "disable",
+  "share": "disabled",
+
+  // v2's replacement for v1's `small_model`: the built-in agent that names sessions gets
+  // its model here. Point it at the same local model -- there is no cheaper one.
+  "agents": {
+    "title": { "model": { "providerID": "work-llm", "model": "REPLACE-WITH-SERVED-MODEL-NAME" } }
+  },
+
+  // `buffer` is the head-room kept free so compaction itself still fits.
+  "compaction": { "auto": true, "buffer": 20000 },
+
+  // Default is 2000 lines / 51200 bytes PER TOOL RESULT, which is a fifth of a 130K
+  // window gone on one careless `cat`. The rest of a long result is saved to disk and
+  // the agent is told where, so nothing is lost.
+  "tool_output": { "max_lines": 400, "max_bytes": 16384 },
+
+  // SKILLS. Whatever is in .opencode\skills of this folder is found without any setting
+  // here (`<name>.md` files and `<name>\SKILL.md` folders alike). To use the team's skills
+  // LIVE from their own clone instead of copying them, remove the two slashes below.
+  // USE BACKSLASHES, doubled because this is JSON. Measured on v2.0.10 / Windows: with
+  // forward slashes (C:/...) every flat `skills\<name>.md` file collapses into ONE skill
+  // named after the folder and the others vanish. Only each skill's `description` costs
+  // context; the body loads on demand.
+  // "skills": ["C:\\repos\\agent_and_skills\\skills"],
+
+  // Ordered rules, LAST match wins.
+  //
+  // Only the human commits and pushes. These four rules cover every agent that has no
+  //    shell rules of its own -- above all the BUILT-IN `build` and `general` agents, which
+  //    otherwise allow everything and are one Tab press away. An agent that declares its own
+  //    `"*": allow` for the shell (coder, reviewer, ...) overrides these, because its rules
+  //    are evaluated later; that is why each of those repeats the same denies in its own
+  //    file. `git * commit*` catches `git -C <path> commit`.
+  //
+  // THE WEB IS OPEN BY DEFAULT: agents look up documentation, error messages and best
+  // practices like a developer would. Every working agent inherits that from here; only
+  // the orchestrator switches its own web tools off (to protect its context - it gets the
+  // researcher's summary instead).
+  //
+  // If company policy or an offline network says otherwise, remove the two slashes in front
+  // of the four lines under WEB-RULES. It must be all four: `execute` is v2's Code Mode (the
+  // model writes JavaScript, OpenCode runs it), the docs say that runtime has no fetch(), and
+  // MEASURED on v2.0.10 it does - an agent with only `webfetch: deny` fetched four websites
+  // through execute, HTTP 200. Denying webfetch alone locks nothing.
+  "permissions": [
+    // WEB-RULES: to lock the web, remove the two slashes in front of the next four lines.
+    // { "action": "webfetch", "resource": "*", "effect": "deny" },
+    // { "action": "websearch", "resource": "*", "effect": "deny" },
+    // { "action": "execute", "resource": "*", "effect": "deny" },
+    // { "action": "browser", "resource": "*", "effect": "deny" },
+    { "action": "shell", "resource": "git commit*", "effect": "deny" },
+    { "action": "shell", "resource": "git push*", "effect": "deny" },
+    { "action": "shell", "resource": "git * commit*", "effect": "deny" },
+    { "action": "shell", "resource": "git * push*", "effect": "deny" }
+  ],
+
+  "providers": {
+    "work-llm": {
+      "name": "Work LLM",
+      "package": "aisdk:@ai-sdk/openai-compatible",
+      "settings": {
+        // Hardcode the URL rather than using {env:...}: configuration is resolved by the
+        // shared background service, which does not inherit the environment of the terminal
+        // you happen to start `opencode` from. Use the 127.0.0.1 literal for a local server
+        // -- `localhost` resolves to ::1 first on Windows. It ends in /v1.
+        "baseURL": "REPLACE-WITH-BASE-URL",
+        "apiKey": "not-needed"
+      },
+      "models": {
+        "REPLACE-WITH-SERVED-MODEL-NAME": {
+          "name": "Qwen3.8 27B (work)",
+          "capabilities": {
+            "tools": true,
+            // Add "image" only if the server really serves vision. Left out, v2 assumes
+            // text AND image input (measured), which is wrong for a text-only server.
+            "input": ["text"],
+            "output": ["text"]
+          },
+          // OpenCode uses `context` only to decide WHEN TO COMPACT. Keep it ~4% under
+          // the server's real window: 126000 for a 131072-token server.
+          "limit": { "context": 126000, "output": 16384 }
+        }
+      }
+    }
+  }
+}
